@@ -1,0 +1,57 @@
+[package]
+name = "spec-kit-mcp"
+version = "0.1.0"
+edition = "2024"
+authors = ["Spec-Kit MCP Contributors"]
+description = "MCP server for GitHub Spec-Kit"
+license = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "spec-kit-mcp"
+path = "src/main.rs"
+
+[lib]
+name = "spec_kit_mcp"
+path = "src/lib.rs"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.49.0", features = ["full"] }
+
+# Serialization
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+
+# Error handling
+anyhow = "1.0.100"
+thiserror = "2.0.18"
+
+# Logging
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
+
+# Process execution
+async-process = "2.5.0"
+
+# File operations
+tokio-fs = "0.1.7"
+
+# Configuration
+config = "0.15.19"
+toml = "0.9.8"
+
+# CLI argument parsing
+clap = { version = "4.5.56", features = ["derive"] }
+
+# Path utilities
+dirs = "6.0.0"
+
+# Async traits
+async-trait = "0.1.89"
+
+[dev-dependencies]
+mockall = "0.14.0"
+tempfile = "3.24.0"
+criterion = "0.8.1"
+tokio-test = "0.4.5"
+assert_matches = "1.5.0"
