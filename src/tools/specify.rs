@@ -120,15 +120,20 @@ impl Tool for SpecifyTool {
             }
         };
 
-        // Format the specification content
-        let mut content = format!(
-            "# Specification\n\n\
-            ## Requirements\n\n{}\n",
-            params.requirements
-        );
+        // Get the specification template
+        let template = crate::templates::SPEC_TEMPLATE;
 
+        // Format the specification content using the template
+        let mut content = template
+            .replace("[FEATURE NAME]", "Feature")
+            .replace("$ARGUMENTS", &params.requirements);
+
+        // Add user stories if provided
         if let Some(stories) = params.user_stories {
-            content.push_str(&format!("\n## User Stories\n\n{}\n", stories));
+            content = content.replace(
+                "### User Story 1 - [Brief Title] (Priority: P1)",
+                &format!("### User Stories\n\n{}", stories),
+            );
         }
 
         // Ensure parent directory exists
@@ -154,8 +159,12 @@ impl Tool for SpecifyTool {
             - What needs to be built (requirements)\n\
             - Who it's for and why (user stories)\n\
             - Success criteria (acceptance criteria)\n\n\
-            Next step: Use speckit_plan tool to create a technical plan",
-            safe_path.display()
+            Next step: Use speckit_plan tool to create a technical plan\n\n\
+            ---\n\n\
+            ## How to use this tool\n\n\
+            {}",
+            safe_path.display(),
+            crate::templates::SPECIFY_COMMAND
         );
 
         Ok(ToolResult {

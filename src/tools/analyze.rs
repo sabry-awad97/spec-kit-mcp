@@ -236,6 +236,9 @@ impl Tool for AnalyzeTool {
             "Analysis complete!\n\n\
             Artifacts found: {}/{}\n\
             Report: {}\n\n\
+            {}\n\n\
+            ---\n\n\
+            ## How to use this tool\n\n\
             {}",
             found_artifacts.len(),
             artifacts.len(),
@@ -244,7 +247,8 @@ impl Tool for AnalyzeTool {
                 "✓ All artifacts present"
             } else {
                 "⚠ Some artifacts are missing"
-            }
+            },
+            crate::templates::ANALYZE_COMMAND
         );
 
         Ok(ToolResult {

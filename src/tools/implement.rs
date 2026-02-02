@@ -127,7 +127,10 @@ impl Tool for ImplementTool {
             5. Commit after completing each logical unit\n\n\
             Context: {}\n\n\
             Output directory: {}\n\n\
-            Next step: Begin implementing the first task",
+            Next step: Begin implementing the first task\n\n\
+            ---\n\n\
+            ## How to use this tool\n\n\
+            {}",
             params.task_file.display(),
             tasks_content
                 .lines()
@@ -135,7 +138,8 @@ impl Tool for ImplementTool {
                 .collect::<Vec<_>>()
                 .join("\n"),
             params.context.as_deref().unwrap_or("None provided"),
-            safe_output_dir.display()
+            safe_output_dir.display(),
+            crate::templates::IMPLEMENT_COMMAND
         );
 
         Ok(ToolResult {

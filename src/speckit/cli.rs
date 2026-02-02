@@ -148,6 +148,7 @@ impl SpecKitCli {
             .args(&full_args)
             .env("PYTHONIOENCODING", "utf-8") // Force UTF-8 encoding for Windows
             .env("PYTHONUTF8", "1") // Enable UTF-8 mode (Python 3.7+)
+            .stdin(Stdio::null()) // Prevent interactive prompts
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output();
@@ -193,8 +194,15 @@ impl SpecKitCli {
             args.push(project_name);
         }
 
+        // Add --ai flag with a default value to avoid interactive prompts
+        args.push("--ai");
+        args.push("claude");
+
         // Add --ignore-agent-tools to skip interactive prompts
         args.push("--ignore-agent-tools");
+
+        // Add --no-git to avoid git-related prompts
+        args.push("--no-git");
 
         let result = self.execute_command(&args).await?;
 

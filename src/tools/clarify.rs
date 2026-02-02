@@ -177,6 +177,9 @@ impl Tool for ClarifyTool {
             Analyzed: {}\n\
             Issues found: {}\n\
             Output: {}\n\n\
+            {}\n\n\
+            ---\n\n\
+            ## How to use this tool\n\n\
             {}",
             params.spec_file.display(),
             clarifications.len(),
@@ -185,7 +188,8 @@ impl Tool for ClarifyTool {
                 "✓ Specification is well-defined"
             } else {
                 "⚠ Please review and address the identified issues"
-            }
+            },
+            crate::templates::CLARIFY_COMMAND
         );
 
         Ok(ToolResult {

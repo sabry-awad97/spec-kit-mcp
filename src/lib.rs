@@ -78,9 +78,11 @@
 //! }
 //! ```
 
+pub mod agents;
 pub mod config;
 pub mod mcp;
 pub mod speckit;
+pub mod templates;
 pub mod tools;
 pub mod utils;
 

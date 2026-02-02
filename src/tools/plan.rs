@@ -124,32 +124,28 @@ impl Tool for PlanTool {
                 )
             })?;
 
-        // Create a basic plan template
-        let mut content = format!(
-            "# Technical Implementation Plan\n\n\
-            ## Based on Specification\n\n\
-            Source: {}\n\n\
-            ## Architecture\n\n\
-            [AI should fill in architecture details based on the specification]\n\n\
-            ## Technology Stack\n\n",
-            params.spec_file.display()
+        // Get the plan template
+        let template = crate::templates::PLAN_TEMPLATE;
+
+        // Create a basic plan using the template
+        let mut content = template.replace("[FEATURE]", "Feature").replace(
+            "[DATE]",
+            &chrono::Local::now().format("%Y-%m-%d").to_string(),
         );
 
+        // Add tech stack if provided
         if let Some(tech_stack) = params.tech_stack {
-            content.push_str(&format!("{}\n\n", tech_stack));
-        } else {
-            content.push_str("[AI should determine appropriate tech stack]\n\n");
+            content = content.replace(
+                "**Language/Version**: [e.g., Typescript, Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]",
+                &format!("**Language/Version**: {}", tech_stack)
+            );
         }
 
-        content.push_str(
-            "## Implementation Approach\n\n\
-            [AI should detail the implementation approach]\n\n\
-            ## Module Breakdown\n\n\
-            [AI should break down into modules/components]\n\n\
-            ## Specification Reference\n\n```\n",
-        );
-        content.push_str(&spec_content);
-        content.push_str("\n```\n");
+        // Add reference to the specification
+        content.push_str(&format!(
+            "\n\n## Specification Reference\n\n```\n{}\n```\n",
+            spec_content
+        ));
 
         // Ensure parent directory exists
         if let Some(parent) = safe_path.parent() {
@@ -170,8 +166,12 @@ impl Tool for PlanTool {
             - Technology stack and frameworks\n\
             - Implementation approach\n\
             - Module breakdown\n\n\
-            Next step: Use speckit_tasks tool to generate actionable tasks",
-            safe_path.display()
+            Next step: Use speckit_tasks tool to generate actionable tasks\n\n\
+            ---\n\n\
+            ## How to use this tool\n\n\
+            {}",
+            safe_path.display(),
+            crate::templates::PLAN_COMMAND
         );
 
         Ok(ToolResult {

@@ -126,24 +126,20 @@ impl Tool for TasksTool {
             .await
             .with_context(|| format!("Failed to read plan file: {}", params.plan_file.display()))?;
 
-        // Create a basic tasks template
-        let content = format!(
-            "# Task List\n\n\
-            ## Based on Plan\n\n\
-            Source: {}\n\
-            Breakdown Level: {}\n\n\
-            ## Tasks\n\n\
-            [AI should generate actionable tasks based on the plan below]\n\n\
-            ### Task Format\n\
-            - [ ] Task description\n\
-            - Acceptance criteria: ...\n\
-            - Dependencies: ...\n\
-            - Estimated effort: ...\n\n\
-            ## Plan Reference\n\n```\n{}\n```\n",
-            params.plan_file.display(),
-            params.breakdown_level,
-            plan_content
-        );
+        // Get the tasks template
+        let template = crate::templates::TASKS_TEMPLATE;
+
+        // Create tasks using the template
+        let content = template
+            .replace("[FEATURE NAME]", "Feature")
+            .replace(
+                "**Input**: Design documents from `/specs/[###-feature-name]/`",
+                &format!("**Input**: Plan from {}", params.plan_file.display())
+            )
+            .replace(
+                "**Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/",
+                &format!("**Prerequisites**: {}", params.plan_file.display())
+            ) + &format!("\n\n## Plan Reference\n\n```\n{}\n```\n", plan_content);
 
         // Ensure parent directory exists
         if let Some(parent) = safe_path.parent() {
@@ -164,8 +160,12 @@ impl Tool for TasksTool {
             - Clear acceptance criteria\n\
             - Dependencies between tasks\n\
             - Estimated effort levels\n\n\
-            Next step: Use speckit_implement tool to execute the tasks",
-            safe_path.display()
+            Next step: Use speckit_implement tool to execute the tasks\n\n\
+            ---\n\n\
+            ## How to use this tool\n\n\
+            {}",
+            safe_path.display(),
+            crate::templates::TASKS_COMMAND
         );
 
         Ok(ToolResult {

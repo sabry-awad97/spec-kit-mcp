@@ -42,14 +42,24 @@ impl Default for CheckParams {
 }
 
 /// Tool for checking required tool installations
-pub struct CheckTool {
-    cli: SpecKitCli,
-}
+pub struct CheckTool {}
 
 impl CheckTool {
     /// Create a new check tool
-    pub fn new(cli: SpecKitCli) -> Self {
-        Self { cli }
+    pub fn new(_cli: SpecKitCli) -> Self {
+        Self {}
+    }
+
+    /// Check if a command is available
+    async fn check_command(&self, command: &str) -> bool {
+        async_process::Command::new(command)
+            .arg("--version")
+            .stdout(async_process::Stdio::null())
+            .stderr(async_process::Stdio::null())
+            .status()
+            .await
+            .map(|s| s.success())
+            .unwrap_or(false)
     }
 }
 
@@ -85,7 +95,7 @@ impl Tool for CheckTool {
     }
 
     async fn execute(&self, params: Value) -> Result<ToolResult> {
-        let _params: CheckParams =
+        let params: CheckParams =
             if params.is_null() || params.as_object().is_some_and(|o| o.is_empty()) {
                 CheckParams::default()
             } else {
@@ -94,14 +104,54 @@ impl Tool for CheckTool {
 
         tracing::info!("Checking tool installations");
 
-        // Execute the spec-kit check command
-        let result = self.cli.check().await?;
-        let is_success = result.is_success();
+        let mut output = String::from("# Tool Installation Check\n\n");
 
-        // The spec-kit check command provides its own formatted output
+        // Check git
+        if params.check_git {
+            let git_available = self.check_command("git").await;
+            if git_available {
+                output.push_str("✓ git is installed\n");
+            } else {
+                output.push_str("✗ git is NOT installed\n");
+                output.push_str("  Install from: https://git-scm.com/downloads\n");
+            }
+        }
+
+        // Check spec-kit (this MCP server provides spec-kit functionality)
+        if params.check_speckit {
+            output.push_str(
+                "\n✓ spec-kit MCP server is running (provides all spec-kit functionality)\n",
+            );
+        }
+
+        // Check AI tools
+        if params.check_ai_tools {
+            output.push_str("\n## AI Coding Assistants\n\n");
+
+            let ai_tools = vec![
+                ("claude", "Claude Desktop"),
+                ("cursor", "Cursor"),
+                ("code", "VS Code"),
+            ];
+
+            for (cmd, name) in ai_tools {
+                let available = self.check_command(cmd).await;
+                if available {
+                    output.push_str(&format!("✓ {} is installed\n", name));
+                } else {
+                    output.push_str(&format!("○ {} not found (optional)\n", name));
+                }
+            }
+        }
+
+        output.push_str("\n## Summary\n\n");
+        output.push_str("The spec-kit MCP server provides all core functionality.\n");
+        output.push_str("Git is recommended for version control.\n");
+        output.push_str("AI coding assistants enhance the development experience.\n");
+
         Ok(ToolResult {
-            content: vec![ContentBlock::text(result.stdout)],
-            is_error: Some(!is_success),
+            content: vec![ContentBlock::text(output)],
+            is_error: None,
         })
     }
 }

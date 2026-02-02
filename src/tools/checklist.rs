@@ -217,10 +217,14 @@ impl Tool for ChecklistTool {
             Total items: {}\n\
             Output: {}\n\n\
             Use this checklist to ensure all requirements are met and\n\
-            quality standards are maintained throughout implementation.",
+            quality standards are maintained throughout implementation.\n\n\
+            ---\n\n\
+            ## How to use this tool\n\n\
+            {}",
             params.spec_file.display(),
             total_items,
-            safe_path.display()
+            safe_path.display(),
+            crate::templates::CHECKLIST_COMMAND
         );
 
         Ok(ToolResult {

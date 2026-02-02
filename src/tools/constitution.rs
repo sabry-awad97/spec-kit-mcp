@@ -105,15 +105,18 @@ impl Tool for ConstitutionTool {
             }
         };
 
-        // Format the constitution content
-        let mut content = format!(
-            "# Project Constitution\n\n\
-            ## Core Principles\n\n{}\n",
-            params.principles
-        );
+        // Get the constitution template
+        let template = crate::templates::CONSTITUTION_TEMPLATE;
+
+        // Format the constitution content using the template
+        let mut content = template
+            .replace("[PROJECT_NAME]", "Project")
+            .replace("[PRINCIPLE_1_NAME]", "Core Principles")
+            .replace("[PRINCIPLE_1_DESCRIPTION]", &params.principles);
 
         if let Some(constraints) = params.constraints {
-            content.push_str(&format!("\n## Technical Constraints\n\n{}\n", constraints));
+            content = content.replace("[SECTION_2_NAME]", "Technical Constraints");
+            content = content.replace("[SECTION_2_CONTENT]", &constraints);
         }
 
         // Ensure parent directory exists
@@ -139,8 +142,12 @@ impl Tool for ConstitutionTool {
             - Core principles that guide development\n\
             - Technical constraints and boundaries\n\
             - Standards for code quality and architecture\n\n\
-            Next step: Use speckit_specify tool to define requirements",
-            safe_path.display()
+            Next step: Use speckit_specify tool to define requirements\n\n\
+            ---\n\n\
+            ## How to use this tool\n\n\
+            {}",
+            safe_path.display(),
+            crate::templates::CONSTITUTION_COMMAND
         );
 
         Ok(ToolResult {
