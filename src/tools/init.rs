@@ -7,27 +7,11 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::fs;
-use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use crate::mcp::types::{ContentBlock, ToolDefinition, ToolResult};
 use crate::speckit::SpecKitCli;
 use crate::tools::Tool;
-
-/// Helper function to recursively copy a directory
-fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
-    fs::create_dir_all(dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let ty = entry.file_type()?;
-        if ty.is_dir() {
-            copy_dir_recursive(&entry.path(), &dst.join(entry.file_name()))?;
-        } else {
-            fs::copy(entry.path(), dst.join(entry.file_name()))?;
-        }
-    }
-    Ok(())
-}
 
 /// Parameters for the speckit_init tool
 #[derive(Debug, Deserialize, Serialize)]
@@ -50,10 +34,6 @@ pub struct InitParams {
     /// Skip git initialization
     #[serde(default)]
     no_git: bool,
-
-    /// GitHub token for API authentication
-    #[serde(default)]
-    github_token: Option<String>,
 }
 
 fn default_project_path() -> PathBuf {
@@ -69,172 +49,7 @@ impl InitTool {
         Self {}
     }
 
-    /// Download the spec-kit template from GitHub
-    async fn download_template(&self, github_token: Option<&str>) -> Result<Vec<u8>> {
-        tracing::info!("Downloading spec-kit template from GitHub");
-
-        // Get GitHub token from parameter or environment
-        let token = github_token
-            .map(|s| s.to_string())
-            .or_else(|| std::env::var("GH_TOKEN").ok())
-            .or_else(|| std::env::var("GITHUB_TOKEN").ok())
-            .filter(|s| !s.is_empty());
-
-        let mut headers = reqwest::header::HeaderMap::new();
-        if let Some(ref token_value) = token {
-            headers.insert(
-                reqwest::header::AUTHORIZATION,
-                format!("Bearer {}", token_value).parse()?,
-            );
-            tracing::info!("Using GitHub token for authentication");
-        } else {
-            tracing::warn!("No GitHub token provided - may hit rate limits");
-        }
-
-        let client = reqwest::Client::builder()
-            .user_agent("spec-kit-mcp/0.1.0")
-            .default_headers(headers)
-            .build()?;
-
-        // Get latest release info
-        let release_url = "https://api.github.com/repos/github/spec-kit/releases/latest";
-        let response = client
-            .get(release_url)
-            .send()
-            .await
-            .context("Failed to fetch release info")?;
-
-        // Check for rate limiting
-        if response.status() == reqwest::StatusCode::FORBIDDEN {
-            if let Some(remaining) = response.headers().get("X-RateLimit-Remaining") {
-                if remaining == "0" {
-                    let reset = response
-                        .headers()
-                        .get("X-RateLimit-Reset")
-                        .and_then(|v| v.to_str().ok())
-                        .and_then(|v| v.parse::<i64>().ok())
-                        .and_then(|ts| chrono::DateTime::from_timestamp(ts, 0));
-
-                    let reset_msg = if let Some(reset_time) = reset {
-                        format!("Resets at {}", reset_time.format("%Y-%m-%d %H:%M:%S UTC"))
-                    } else {
-                        "Check X-RateLimit-Reset header".to_string()
-                    };
-
-                    return Err(anyhow!(
-                        "GitHub API rate limit exceeded. {}\n\
-                        Consider setting GH_TOKEN or GITHUB_TOKEN environment variable.",
-                        reset_msg
-                    ));
-                }
-            }
-        }
-
-        let release: serde_json::Value = response
-            .error_for_status()
-            .context("Failed to get release info")?
-            .json()
-            .await
-            .context("Failed to parse release info")?;
-
-        // Get the zipball URL
-        let zipball_url = release["zipball_url"]
-            .as_str()
-            .ok_or_else(|| anyhow!("No zipball_url in release"))?;
-
-        tracing::info!(url = %zipball_url, "Downloading template archive");
-
-        // Download the ZIP
-        let response = client
-            .get(zipball_url)
-            .send()
-            .await
-            .context("Failed to download template")?;
-
-        let bytes = response
-            .bytes()
-            .await
-            .context("Failed to read template bytes")?;
-
-        tracing::info!(size = bytes.len(), "Downloaded template");
-
-        Ok(bytes.to_vec())
-    }
-
-    /// Extract template to project directory
-    fn extract_template(
-        &self,
-        zip_data: &[u8],
-        project_path: &Path,
-        is_current_dir: bool,
-    ) -> Result<()> {
-        tracing::info!(
-            path = %project_path.display(),
-            is_current_dir = is_current_dir,
-            "Extracting template"
-        );
-
-        // Create a cursor for the ZIP data
-        let cursor = std::io::Cursor::new(zip_data);
-        let mut archive = zip::ZipArchive::new(cursor).context("Failed to open ZIP archive")?;
-
-        tracing::info!(entries = archive.len(), "ZIP archive opened");
-
-        // Create project directory if not current dir
-        if !is_current_dir && !project_path.exists() {
-            fs::create_dir_all(project_path).with_context(|| {
-                format!("Failed to create directory: {}", project_path.display())
-            })?;
-        }
-
-        // Extract all files
-        for i in 0..archive.len() {
-            let mut file = archive.by_index(i)?;
-            let file_path = file.name();
-
-            // Skip the root directory (github creates a nested dir like "spec-kit-abc123/")
-            let parts: Vec<&str> = file_path.split('/').collect();
-            if parts.len() <= 1 {
-                continue; // Skip root directory entry
-            }
-
-            // Remove the first component (root dir) to flatten structure
-            let relative_path = parts[1..].join("/");
-            if relative_path.is_empty() {
-                continue;
-            }
-
-            let output_path = project_path.join(&relative_path);
-
-            if file.is_dir() {
-                fs::create_dir_all(&output_path).with_context(|| {
-                    format!("Failed to create directory: {}", output_path.display())
-                })?;
-            } else {
-                // Create parent directories
-                if let Some(parent) = output_path.parent() {
-                    fs::create_dir_all(parent).with_context(|| {
-                        format!("Failed to create parent directory: {}", parent.display())
-                    })?;
-                }
-
-                // Extract file
-                let mut output_file = fs::File::create(&output_path)
-                    .with_context(|| format!("Failed to create file: {}", output_path.display()))?;
-
-                let mut buffer = Vec::new();
-                file.read_to_end(&mut buffer)?;
-                output_file.write_all(&buffer)?;
-
-                tracing::debug!(file = %relative_path, "Extracted file");
-            }
-        }
-
-        tracing::info!("Template extraction complete");
-        Ok(())
-    }
-
-    /// Initialize project with native Rust implementation
+    /// Initialize project with native Rust implementation (using embedded templates)
     async fn init_native(
         &self,
         project_name: &str,
@@ -242,15 +57,11 @@ impl InitTool {
         params: &InitParams,
     ) -> Result<String> {
         // Determine actual project path
-        // If project_path is ".", create a subdirectory with project_name
-        // Otherwise, use project_path as-is
         let actual_path = if project_path == Path::new(".") || project_path == Path::new("") {
             PathBuf::from(project_name)
         } else {
             project_path.to_path_buf()
         };
-
-        let is_current_dir = false; // Always create in subdirectory for MCP
 
         // Check if directory already exists
         if actual_path.exists() {
@@ -260,13 +71,10 @@ impl InitTool {
             ));
         }
 
-        // Download template
-        let zip_data = self
-            .download_template(params.github_token.as_deref())
-            .await?;
+        tracing::info!("Creating project structure with embedded templates");
 
-        // Extract template
-        self.extract_template(&zip_data, &actual_path, is_current_dir)?;
+        // Create project directory
+        fs::create_dir_all(&actual_path).context("Failed to create project directory")?;
 
         // Create .specify directory structure
         let specify_dir = actual_path.join(".specify");
@@ -275,55 +83,48 @@ impl InitTool {
         // Create subdirectories
         fs::create_dir_all(specify_dir.join("memory"))
             .context("Failed to create .specify/memory directory")?;
-        fs::create_dir_all(specify_dir.join("scripts"))
-            .context("Failed to create .specify/scripts directory")?;
         fs::create_dir_all(specify_dir.join("templates"))
             .context("Failed to create .specify/templates directory")?;
 
-        // Move extracted files into .specify
-        // Move memory/ -> .specify/memory/
-        if actual_path.join("memory").exists() {
-            for entry in fs::read_dir(actual_path.join("memory"))? {
-                let entry = entry?;
-                let dest = specify_dir.join("memory").join(entry.file_name());
-                fs::rename(entry.path(), dest)?;
-            }
-            fs::remove_dir(actual_path.join("memory"))?;
-        }
+        // Write embedded templates to .specify/templates/
+        fs::write(
+            specify_dir.join("templates/constitution.md"),
+            crate::templates::CONSTITUTION_TEMPLATE,
+        )?;
+        fs::write(
+            specify_dir.join("templates/spec-template.md"),
+            crate::templates::SPEC_TEMPLATE,
+        )?;
+        fs::write(
+            specify_dir.join("templates/plan-template.md"),
+            crate::templates::PLAN_TEMPLATE,
+        )?;
+        fs::write(
+            specify_dir.join("templates/tasks-template.md"),
+            crate::templates::TASKS_TEMPLATE,
+        )?;
+        fs::write(
+            specify_dir.join("templates/checklist-template.md"),
+            crate::templates::CHECKLIST_TEMPLATE,
+        )?;
 
-        // Move scripts/ -> .specify/scripts/
-        if actual_path.join("scripts").exists() {
-            for entry in fs::read_dir(actual_path.join("scripts"))? {
-                let entry = entry?;
-                let dest = specify_dir.join("scripts").join(entry.file_name());
-                if entry.path().is_dir() {
-                    // Move directory recursively
-                    copy_dir_recursive(&entry.path(), &dest)?;
-                    fs::remove_dir_all(entry.path())?;
-                } else {
-                    fs::rename(entry.path(), dest)?;
-                }
-            }
-            fs::remove_dir(actual_path.join("scripts"))?;
-        }
+        // Create initial constitution in memory/
+        let constitution_content = format!(
+            "# {} - Project Constitution\n\n\
+            ## Core Principles\n\n\
+            1. [Add your core principles here]\n\n\
+            ## Technical Constraints\n\n\
+            - [Add technical constraints here]\n\n\
+            ## Development Standards\n\n\
+            - [Add development standards here]\n",
+            project_name
+        );
+        fs::write(
+            specify_dir.join("memory/constitution.md"),
+            constitution_content,
+        )?;
 
-        // Move templates/ -> .specify/templates/
-        if actual_path.join("templates").exists() {
-            for entry in fs::read_dir(actual_path.join("templates"))? {
-                let entry = entry?;
-                let dest = specify_dir.join("templates").join(entry.file_name());
-                if entry.path().is_dir() {
-                    copy_dir_recursive(&entry.path(), &dest)?;
-                    fs::remove_dir_all(entry.path())?;
-                } else {
-                    fs::rename(entry.path(), dest)?;
-                }
-            }
-            fs::remove_dir(actual_path.join("templates"))?;
-        }
-
-        // Verify .specify directory was created
-        let specify_dir = actual_path.join(".specify");
+        tracing::info!("Created .specify directory structure with embedded templates");
         if !specify_dir.exists() {
             return Err(anyhow!(
                 "Template extraction failed: .specify directory not found"
@@ -553,10 +354,6 @@ impl Tool for InitTool {
                         "type": "boolean",
                         "description": "Skip git repository initialization",
                         "default": false
-                    },
-                    "github_token": {
-                        "type": "string",
-                        "description": "GitHub token for API authentication (or set GH_TOKEN/GITHUB_TOKEN env var)"
                     }
                 },
                 "required": ["project_name"]

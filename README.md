@@ -75,10 +75,7 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json` (Windows) or `~/Library/App
   "mcpServers": {
     "spec-kit": {
       "command": "E:\\path\\to\\spec-kit-mcp\\target\\release\\spec-kit-mcp.exe",
-      "args": [],
-      "env": {
-        "GH_TOKEN": "your_github_token_here"
-      }
+      "args": []
     }
   }
 }
