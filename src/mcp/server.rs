@@ -114,7 +114,7 @@ impl McpServer {
         let result = tool
             .execute(tool_call.arguments)
             .await
-            .context("Tool execution failed")?;
+            .with_context(|| format!("Tool '{}' execution failed", tool_call.name))?;
 
         // Create response
         Ok(self.protocol.create_tool_result_response(id, result))

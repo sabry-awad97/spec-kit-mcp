@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use crate::mcp::types::{ContentBlock, ToolDefinition, ToolResult};
 use crate::speckit::SpecKitCli;
 use crate::tools::Tool;
+use crate::utils::{validate_file_exists, validate_project_initialized, validate_safe_path};
 
 /// Parameters for the speckit_plan tool
 #[derive(Debug, Deserialize, Serialize)]
@@ -82,36 +83,46 @@ impl Tool for PlanTool {
             "Creating technical plan"
         );
 
-        // Check if .specify directory exists
-        let specify_dir = std::path::Path::new(".specify");
-        if !specify_dir.exists() {
+        // Validate project is initialized
+        if let Err(msg) = validate_project_initialized() {
             return Ok(ToolResult {
-                content: vec![ContentBlock::text(
-                    "Error: .specify directory not found!\n\n\
-                    Please run speckit_init first to initialize the project structure.\n\n\
-                    Example: Use speckit_init with project_name=\"my-project\""
-                        .to_string(),
-                )],
+                content: vec![ContentBlock::text(msg)],
                 is_error: Some(true),
             });
         }
 
-        // Check if spec file exists
-        if !params.spec_file.exists() {
+        // Validate spec file exists
+        if let Err(msg) = validate_file_exists(&params.spec_file, "Specification") {
             return Ok(ToolResult {
-                content: vec![ContentBlock::text(format!(
-                    "Error: Specification file not found at {}\n\n\
-                    Please create a specification first using speckit_specify tool.",
-                    params.spec_file.display()
-                ))],
+                content: vec![ContentBlock::text(msg)],
                 is_error: Some(true),
             });
         }
+
+        // Validate output path is safe
+        let safe_path = match validate_safe_path(&params.output_path) {
+            Ok(path) => path,
+            Err(e) => {
+                return Ok(ToolResult {
+                    content: vec![ContentBlock::text(format!(
+                        "Invalid output path: {}\n\n\
+                        Please provide a path within the project directory.",
+                        e
+                    ))],
+                    is_error: Some(true),
+                });
+            }
+        };
 
         // Read the specification
         let spec_content = tokio::fs::read_to_string(&params.spec_file)
             .await
-            .context("Failed to read specification file")?;
+            .with_context(|| {
+                format!(
+                    "Failed to read specification file: {}",
+                    params.spec_file.display()
+                )
+            })?;
 
         // Create a basic plan template
         let mut content = format!(
@@ -141,16 +152,16 @@ impl Tool for PlanTool {
         content.push_str("\n```\n");
 
         // Ensure parent directory exists
-        if let Some(parent) = params.output_path.parent() {
-            tokio::fs::create_dir_all(parent)
-                .await
-                .context("Failed to create parent directory")?;
+        if let Some(parent) = safe_path.parent() {
+            tokio::fs::create_dir_all(parent).await.with_context(|| {
+                format!("Failed to create parent directory: {}", parent.display())
+            })?;
         }
 
         // Write plan file
-        tokio::fs::write(&params.output_path, content)
+        tokio::fs::write(&safe_path, content)
             .await
-            .context("Failed to write plan file")?;
+            .with_context(|| format!("Failed to write plan file to: {}", safe_path.display()))?;
 
         let message = format!(
             "Technical plan created successfully at {}\n\n\
@@ -160,7 +171,7 @@ impl Tool for PlanTool {
             - Implementation approach\n\
             - Module breakdown\n\n\
             Next step: Use speckit_tasks tool to generate actionable tasks",
-            params.output_path.display()
+            safe_path.display()
         );
 
         Ok(ToolResult {
@@ -198,31 +209,27 @@ mod tests {
         fs::create_dir(&specify_dir).await.unwrap();
 
         let spec_file = dir.path().join("spec.md");
-        let output_path = dir.path().join("plan.md");
+        let _output_path = dir.path().join("plan.md");
 
         // Create dummy spec file
         fs::write(&spec_file, "Test specification").await.unwrap();
 
         let params = json!({
-            "spec_file": spec_file.to_str().unwrap(),
+            "spec_file": "spec.md",  // Use relative path
             "tech_stack": "Rust + Tokio",
-            "output_path": output_path.to_str().unwrap()
+            "output_path": "plan.md"  // Use relative path
         });
 
-        // For testing, temporarily create .specify in current directory
-        let current_specify = std::path::Path::new(".specify");
-        let cleanup_needed = !current_specify.exists();
-        if cleanup_needed {
-            fs::create_dir(current_specify).await.unwrap();
-        }
+        // Change to temp directory for test
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(dir.path()).unwrap();
 
         let result = tool.execute(params).await.unwrap();
 
-        // Cleanup
-        if cleanup_needed {
-            fs::remove_dir(current_specify).await.ok();
-        }
+        // Restore original directory
+        std::env::set_current_dir(original_dir).unwrap();
 
+        // Check result - should succeed now that we're in the right directory
         assert!(result.is_error.is_none() || !result.is_error.unwrap());
     }
 }

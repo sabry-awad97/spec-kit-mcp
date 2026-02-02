@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use crate::mcp::types::{ContentBlock, ToolDefinition, ToolResult};
 use crate::speckit::SpecKitCli;
 use crate::tools::Tool;
+use crate::utils::{validate_project_initialized, validate_safe_path};
 
 /// Parameters for the speckit_specify tool
 #[derive(Debug, Deserialize, Serialize)]
@@ -96,19 +97,28 @@ impl Tool for SpecifyTool {
             "Creating specification"
         );
 
-        // Check if .specify directory exists
-        let specify_dir = std::path::Path::new(".specify");
-        if !specify_dir.exists() {
+        // Validate project is initialized
+        if let Err(msg) = validate_project_initialized() {
             return Ok(ToolResult {
-                content: vec![ContentBlock::text(
-                    "Error: .specify directory not found!\n\n\
-                    Please run speckit_init first to initialize the project structure.\n\n\
-                    Example: Use speckit_init with project_name=\"my-project\""
-                        .to_string(),
-                )],
+                content: vec![ContentBlock::text(msg)],
                 is_error: Some(true),
             });
         }
+
+        // Validate output path is safe
+        let safe_path = match validate_safe_path(&params.output_path) {
+            Ok(path) => path,
+            Err(e) => {
+                return Ok(ToolResult {
+                    content: vec![ContentBlock::text(format!(
+                        "Invalid output path: {}\n\n\
+                        Please provide a path within the project directory.",
+                        e
+                    ))],
+                    is_error: Some(true),
+                });
+            }
+        };
 
         // Format the specification content
         let mut content = format!(
@@ -122,16 +132,21 @@ impl Tool for SpecifyTool {
         }
 
         // Ensure parent directory exists
-        if let Some(parent) = params.output_path.parent() {
-            tokio::fs::create_dir_all(parent)
-                .await
-                .context("Failed to create parent directory")?;
+        if let Some(parent) = safe_path.parent() {
+            tokio::fs::create_dir_all(parent).await.with_context(|| {
+                format!("Failed to create parent directory: {}", parent.display())
+            })?;
         }
 
         // Write specification file
-        tokio::fs::write(&params.output_path, content)
+        tokio::fs::write(&safe_path, content)
             .await
-            .context("Failed to write specification file")?;
+            .with_context(|| {
+                format!(
+                    "Failed to write specification file to: {}",
+                    safe_path.display()
+                )
+            })?;
 
         let message = format!(
             "Specification created successfully at {}\n\n\
@@ -140,7 +155,7 @@ impl Tool for SpecifyTool {
             - Who it's for and why (user stories)\n\
             - Success criteria (acceptance criteria)\n\n\
             Next step: Use speckit_plan tool to create a technical plan",
-            params.output_path.display()
+            safe_path.display()
         );
 
         Ok(ToolResult {
@@ -181,23 +196,19 @@ mod tests {
         let params = json!({
             "requirements": "User authentication system with OAuth2 support",
             "user_stories": "As a user, I want to login with Google, so that I don't need another password",
-            "output_path": output_path.to_str().unwrap()
+            "output_path": "specification.md"  // Use relative path
         });
 
-        // For testing, temporarily create .specify in current directory
-        let current_specify = std::path::Path::new(".specify");
-        let cleanup_needed = !current_specify.exists();
-        if cleanup_needed {
-            tokio::fs::create_dir(current_specify).await.unwrap();
-        }
+        // Change to temp directory for test
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(dir.path()).unwrap();
 
         let result = tool.execute(params).await.unwrap();
 
-        // Cleanup
-        if cleanup_needed {
-            tokio::fs::remove_dir(current_specify).await.ok();
-        }
+        // Restore original directory
+        std::env::set_current_dir(original_dir).unwrap();
 
+        // Check result - should succeed now that we're in the right directory
         assert!(result.is_error.is_none() || !result.is_error.unwrap());
         assert!(output_path.exists());
     }

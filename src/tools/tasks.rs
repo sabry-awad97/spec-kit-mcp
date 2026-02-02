@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use crate::mcp::types::{ContentBlock, ToolDefinition, ToolResult};
 use crate::speckit::SpecKitCli;
 use crate::tools::Tool;
+use crate::utils::{validate_file_exists, validate_project_initialized, validate_safe_path};
 
 /// Parameters for the speckit_tasks tool
 #[derive(Debug, Deserialize, Serialize)]
@@ -89,36 +90,41 @@ impl Tool for TasksTool {
             "Generating task list"
         );
 
-        // Check if .specify directory exists
-        let specify_dir = std::path::Path::new(".specify");
-        if !specify_dir.exists() {
+        // Validate project is initialized
+        if let Err(msg) = validate_project_initialized() {
             return Ok(ToolResult {
-                content: vec![ContentBlock::text(
-                    "Error: .specify directory not found!\n\n\
-                    Please run speckit_init first to initialize the project structure.\n\n\
-                    Example: Use speckit_init with project_name=\"my-project\""
-                        .to_string(),
-                )],
+                content: vec![ContentBlock::text(msg)],
                 is_error: Some(true),
             });
         }
 
-        // Check if plan file exists
-        if !params.plan_file.exists() {
+        // Validate plan file exists
+        if let Err(msg) = validate_file_exists(&params.plan_file, "Plan") {
             return Ok(ToolResult {
-                content: vec![ContentBlock::text(format!(
-                    "Error: Plan file not found at {}\n\n\
-                    Please create a technical plan first using speckit_plan tool.",
-                    params.plan_file.display()
-                ))],
+                content: vec![ContentBlock::text(msg)],
                 is_error: Some(true),
             });
         }
+
+        // Validate output path is safe
+        let safe_path = match validate_safe_path(&params.output_path) {
+            Ok(path) => path,
+            Err(e) => {
+                return Ok(ToolResult {
+                    content: vec![ContentBlock::text(format!(
+                        "Invalid output path: {}\n\n\
+                        Please provide a path within the project directory.",
+                        e
+                    ))],
+                    is_error: Some(true),
+                });
+            }
+        };
 
         // Read the plan
         let plan_content = tokio::fs::read_to_string(&params.plan_file)
             .await
-            .context("Failed to read plan file")?;
+            .with_context(|| format!("Failed to read plan file: {}", params.plan_file.display()))?;
 
         // Create a basic tasks template
         let content = format!(
@@ -140,16 +146,16 @@ impl Tool for TasksTool {
         );
 
         // Ensure parent directory exists
-        if let Some(parent) = params.output_path.parent() {
-            tokio::fs::create_dir_all(parent)
-                .await
-                .context("Failed to create parent directory")?;
+        if let Some(parent) = safe_path.parent() {
+            tokio::fs::create_dir_all(parent).await.with_context(|| {
+                format!("Failed to create parent directory: {}", parent.display())
+            })?;
         }
 
         // Write tasks file
-        tokio::fs::write(&params.output_path, content)
+        tokio::fs::write(&safe_path, content)
             .await
-            .context("Failed to write tasks file")?;
+            .with_context(|| format!("Failed to write tasks file to: {}", safe_path.display()))?;
 
         let message = format!(
             "Task list generated successfully at {}\n\n\
@@ -159,7 +165,7 @@ impl Tool for TasksTool {
             - Dependencies between tasks\n\
             - Estimated effort levels\n\n\
             Next step: Use speckit_implement tool to execute the tasks",
-            params.output_path.display()
+            safe_path.display()
         );
 
         Ok(ToolResult {
@@ -197,15 +203,15 @@ mod tests {
         fs::create_dir(&specify_dir).await.unwrap();
 
         let plan_file = dir.path().join("plan.md");
-        let output_path = dir.path().join("tasks.md");
+        let _output_path = dir.path().join("tasks.md");
 
         // Create dummy plan file
         fs::write(&plan_file, "Test plan").await.unwrap();
 
         let params = json!({
-            "plan_file": plan_file.to_str().unwrap(),
+            "plan_file": "plan.md",  // Use relative path
             "breakdown_level": "medium",
-            "output_path": output_path.to_str().unwrap()
+            "output_path": "tasks.md"  // Use relative path
         });
 
         // Change to temp directory for test
@@ -217,6 +223,7 @@ mod tests {
         // Restore original directory
         std::env::set_current_dir(original_dir).unwrap();
 
+        // Check result - should succeed now that we're in the right directory
         assert!(result.is_error.is_none() || !result.is_error.unwrap());
     }
 }

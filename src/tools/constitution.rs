@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use crate::mcp::types::{ContentBlock, ToolDefinition, ToolResult};
 use crate::speckit::SpecKitCli;
 use crate::tools::Tool;
+use crate::utils::{validate_project_initialized, validate_safe_path};
 
 /// Parameters for the speckit_constitution tool
 #[derive(Debug, Deserialize, Serialize)]
@@ -81,19 +82,28 @@ impl Tool for ConstitutionTool {
             "Creating constitution"
         );
 
-        // Check if .specify directory exists
-        let specify_dir = std::path::Path::new(".specify");
-        if !specify_dir.exists() {
+        // Validate project is initialized
+        if let Err(msg) = validate_project_initialized() {
             return Ok(ToolResult {
-                content: vec![ContentBlock::text(
-                    "Error: .specify directory not found!\n\n\
-                    Please run speckit_init first to initialize the project structure.\n\n\
-                    Example: Use speckit_init with project_name=\"my-project\""
-                        .to_string(),
-                )],
+                content: vec![ContentBlock::text(msg)],
                 is_error: Some(true),
             });
         }
+
+        // Validate output path is safe
+        let safe_path = match validate_safe_path(&params.output_path) {
+            Ok(path) => path,
+            Err(e) => {
+                return Ok(ToolResult {
+                    content: vec![ContentBlock::text(format!(
+                        "Invalid output path: {}\n\n\
+                        Please provide a path within the project directory.",
+                        e
+                    ))],
+                    is_error: Some(true),
+                });
+            }
+        };
 
         // Format the constitution content
         let mut content = format!(
@@ -107,16 +117,21 @@ impl Tool for ConstitutionTool {
         }
 
         // Ensure parent directory exists
-        if let Some(parent) = params.output_path.parent() {
-            tokio::fs::create_dir_all(parent)
-                .await
-                .context("Failed to create parent directory")?;
+        if let Some(parent) = safe_path.parent() {
+            tokio::fs::create_dir_all(parent).await.with_context(|| {
+                format!("Failed to create parent directory: {}", parent.display())
+            })?;
         }
 
         // Write constitution file
-        tokio::fs::write(&params.output_path, content)
+        tokio::fs::write(&safe_path, content)
             .await
-            .context("Failed to write constitution file")?;
+            .with_context(|| {
+                format!(
+                    "Failed to write constitution file to: {}",
+                    safe_path.display()
+                )
+            })?;
 
         let message = format!(
             "Constitution created successfully at {}\n\n\
@@ -125,7 +140,7 @@ impl Tool for ConstitutionTool {
             - Technical constraints and boundaries\n\
             - Standards for code quality and architecture\n\n\
             Next step: Use speckit_specify tool to define requirements",
-            params.output_path.display()
+            safe_path.display()
         );
 
         Ok(ToolResult {
@@ -161,12 +176,10 @@ mod tests {
         let specify_dir = dir.path().join(".specify");
         tokio::fs::create_dir(&specify_dir).await.unwrap();
 
-        let output_path = dir.path().join("constitution.md");
-
         let params = json!({
             "principles": "Simplicity, Performance, Security",
             "constraints": "Must support Python 3.11+",
-            "output_path": output_path.to_str().unwrap()
+            "output_path": "constitution.md"  // Use relative path
         });
 
         // Change to temp directory for test
@@ -175,10 +188,11 @@ mod tests {
 
         let result = tool.execute(params).await.unwrap();
 
+        // Check result while still in temp directory
+        assert!(result.is_error.is_none() || !result.is_error.unwrap());
+        assert!(std::path::Path::new("constitution.md").exists());
+
         // Restore original directory
         std::env::set_current_dir(original_dir).unwrap();
-
-        assert!(result.is_error.is_none() || !result.is_error.unwrap());
-        assert!(output_path.exists());
     }
 }

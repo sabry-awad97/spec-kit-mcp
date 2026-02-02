@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use crate::mcp::types::{ContentBlock, ToolDefinition, ToolResult};
 use crate::speckit::SpecKitCli;
 use crate::tools::Tool;
+use crate::utils::{validate_file_exists, validate_safe_path};
 
 /// Parameters for the speckit_implement tool
 #[derive(Debug, Deserialize, Serialize)]
@@ -82,10 +83,35 @@ impl Tool for ImplementTool {
             "Executing implementation"
         );
 
+        // Validate task file exists
+        if let Err(msg) = validate_file_exists(&params.task_file, "Tasks") {
+            return Ok(ToolResult {
+                content: vec![ContentBlock::text(msg)],
+                is_error: Some(true),
+            });
+        }
+
+        // Validate output directory is safe
+        let safe_output_dir = match validate_safe_path(&params.output_dir) {
+            Ok(path) => path,
+            Err(e) => {
+                return Ok(ToolResult {
+                    content: vec![ContentBlock::text(format!(
+                        "Invalid output directory: {}\n\n\
+                        Please provide a path within the project directory.",
+                        e
+                    ))],
+                    is_error: Some(true),
+                });
+            }
+        };
+
         // Read the tasks file
         let tasks_content = tokio::fs::read_to_string(&params.task_file)
             .await
-            .context("Failed to read tasks file")?;
+            .with_context(|| {
+                format!("Failed to read tasks file: {}", params.task_file.display())
+            })?;
 
         // For now, we return guidance since actual implementation
         // requires AI-generated code based on specs
@@ -109,7 +135,7 @@ impl Tool for ImplementTool {
                 .collect::<Vec<_>>()
                 .join("\n"),
             params.context.as_deref().unwrap_or("None provided"),
-            params.output_dir.display()
+            safe_output_dir.display()
         );
 
         Ok(ToolResult {
@@ -149,12 +175,21 @@ mod tests {
             .unwrap();
 
         let params = json!({
-            "task_file": task_file.to_str().unwrap(),
+            "task_file": "tasks.md",  // Use relative path
             "context": "Using Rust 2021 edition",
-            "output_dir": dir.path().join("src").to_str().unwrap()
+            "output_dir": "src"  // Use relative path
         });
 
+        // Change to temp directory for test
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(dir.path()).unwrap();
+
         let result = tool.execute(params).await.unwrap();
+
+        // Restore original directory
+        std::env::set_current_dir(original_dir).unwrap();
+
+        // Check result - should succeed now that we're in the right directory
         assert!(result.is_error.is_none() || !result.is_error.unwrap());
     }
 }

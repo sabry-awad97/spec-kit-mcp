@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use crate::mcp::types::{ContentBlock, ToolDefinition, ToolResult};
 use crate::speckit::SpecKitCli;
 use crate::tools::Tool;
+use crate::utils::{validate_file_exists, validate_safe_path};
 
 /// Parameters for the speckit_clarify tool
 #[derive(Debug, Deserialize, Serialize)]
@@ -82,10 +83,38 @@ impl Tool for ClarifyTool {
             "Analyzing specification for ambiguities"
         );
 
+        // Validate spec file exists
+        if let Err(msg) = validate_file_exists(&params.spec_file, "Specification") {
+            return Ok(ToolResult {
+                content: vec![ContentBlock::text(msg)],
+                is_error: Some(true),
+            });
+        }
+
+        // Validate output path is safe
+        let safe_path = match validate_safe_path(&params.output_path) {
+            Ok(path) => path,
+            Err(e) => {
+                return Ok(ToolResult {
+                    content: vec![ContentBlock::text(format!(
+                        "Invalid output path: {}\n\n\
+                        Please provide a path within the project directory.",
+                        e
+                    ))],
+                    is_error: Some(true),
+                });
+            }
+        };
+
         // Read the specification
         let spec_content = tokio::fs::read_to_string(&params.spec_file)
             .await
-            .context("Failed to read specification file")?;
+            .with_context(|| {
+                format!(
+                    "Failed to read specification file: {}",
+                    params.spec_file.display()
+                )
+            })?;
 
         // Analyze for common ambiguities
         let mut clarifications = Vec::new();
@@ -137,9 +166,11 @@ impl Tool for ClarifyTool {
         }
 
         // Write clarifications
-        tokio::fs::write(&params.output_path, &content)
+        tokio::fs::write(&safe_path, &content)
             .await
-            .context("Failed to write clarifications")?;
+            .with_context(|| {
+                format!("Failed to write clarifications to: {}", safe_path.display())
+            })?;
 
         let message = format!(
             "Clarification analysis complete!\n\n\
@@ -149,7 +180,7 @@ impl Tool for ClarifyTool {
             {}",
             params.spec_file.display(),
             clarifications.len(),
-            params.output_path.display(),
+            safe_path.display(),
             if clarifications.is_empty() {
                 "✓ Specification is well-defined"
             } else {
@@ -198,11 +229,20 @@ mod tests {
         .unwrap();
 
         let params = json!({
-            "spec_file": spec_file.to_str().unwrap(),
-            "output_path": output_path.to_str().unwrap()
+            "spec_file": "spec.md",  // Use relative path
+            "output_path": "clarify.md"  // Use relative path
         });
 
+        // Change to temp directory for test
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(dir.path()).unwrap();
+
         let result = tool.execute(params).await.unwrap();
+
+        // Restore original directory
+        std::env::set_current_dir(original_dir).unwrap();
+
+        // Check result - should succeed now that we're in the right directory
         assert!(result.is_error.is_none() || !result.is_error.unwrap());
         assert!(output_path.exists());
     }

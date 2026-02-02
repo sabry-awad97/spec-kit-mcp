@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use crate::mcp::types::{ContentBlock, ToolDefinition, ToolResult};
 use crate::speckit::SpecKitCli;
 use crate::tools::Tool;
+use crate::utils::validate_safe_path;
 
 /// Parameters for the speckit_analyze tool
 #[derive(Debug, Deserialize, Serialize)]
@@ -94,6 +95,21 @@ impl Tool for AnalyzeTool {
             project_path = %params.project_path.display(),
             "Analyzing project artifacts"
         );
+
+        // Validate output path is safe
+        let safe_output_path = match validate_safe_path(&params.output_path) {
+            Ok(path) => path,
+            Err(e) => {
+                return Ok(ToolResult {
+                    content: vec![ContentBlock::text(format!(
+                        "Invalid output path: {}\n\n\
+                        Please provide a path within the project directory.",
+                        e
+                    ))],
+                    is_error: Some(true),
+                });
+            }
+        };
 
         let mut analysis = String::from("# Spec-Kit Analysis Report\n\n");
         analysis.push_str(&format!("Project: {}\n\n", params.project_path.display()));
@@ -207,9 +223,14 @@ impl Tool for AnalyzeTool {
         analysis.push_str("4. Keep artifacts updated as project evolves\n");
 
         // Write analysis
-        tokio::fs::write(&params.output_path, &analysis)
+        tokio::fs::write(&safe_output_path, &analysis)
             .await
-            .context("Failed to write analysis")?;
+            .with_context(|| {
+                format!(
+                    "Failed to write analysis to: {}",
+                    safe_output_path.display()
+                )
+            })?;
 
         let message = format!(
             "Analysis complete!\n\n\
@@ -218,7 +239,7 @@ impl Tool for AnalyzeTool {
             {}",
             found_artifacts.len(),
             artifacts.len(),
-            params.output_path.display(),
+            safe_output_path.display(),
             if found_artifacts.len() == artifacts.len() {
                 "✓ All artifacts present"
             } else {
@@ -265,12 +286,21 @@ mod tests {
             .unwrap();
 
         let params = json!({
-            "project_path": dir.path().to_str().unwrap(),
+            "project_path": ".",  // Use current directory
             "check_consistency": true,
             "check_coverage": true
         });
 
+        // Change to temp directory for test
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(dir.path()).unwrap();
+
         let result = tool.execute(params).await.unwrap();
+
+        // Restore original directory
+        std::env::set_current_dir(original_dir).unwrap();
+
+        // Check result - should succeed now that we're in the right directory
         assert!(result.is_error.is_none() || !result.is_error.unwrap());
     }
 }

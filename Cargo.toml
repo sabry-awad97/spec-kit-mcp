@@ -1,7 +1,7 @@
 [package]
 name = "spec-kit-mcp"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 authors = ["Spec-Kit MCP Contributors"]
 description = "MCP server for GitHub Spec-Kit"
 license = "MIT OR Apache-2.0"
@@ -32,9 +32,6 @@ tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
 
 # Process execution
 async-process = "2.5.0"
-
-# File operations
-tokio-fs = "0.1.7"
 
 # Configuration
 config = "0.15.19"

@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use crate::mcp::types::{ContentBlock, ToolDefinition, ToolResult};
 use crate::speckit::SpecKitCli;
 use crate::tools::Tool;
+use crate::utils::{validate_file_exists, validate_safe_path};
 
 /// Parameters for the speckit_checklist tool
 #[derive(Debug, Deserialize, Serialize)]
@@ -95,10 +96,38 @@ impl Tool for ChecklistTool {
             "Generating validation checklist"
         );
 
+        // Validate spec file exists
+        if let Err(msg) = validate_file_exists(&params.spec_file, "Specification") {
+            return Ok(ToolResult {
+                content: vec![ContentBlock::text(msg)],
+                is_error: Some(true),
+            });
+        }
+
+        // Validate output path is safe
+        let safe_path = match validate_safe_path(&params.output_path) {
+            Ok(path) => path,
+            Err(e) => {
+                return Ok(ToolResult {
+                    content: vec![ContentBlock::text(format!(
+                        "Invalid output path: {}\n\n\
+                        Please provide a path within the project directory.",
+                        e
+                    ))],
+                    is_error: Some(true),
+                });
+            }
+        };
+
         // Read specification
         let spec_content = tokio::fs::read_to_string(&params.spec_file)
             .await
-            .context("Failed to read specification file")?;
+            .with_context(|| {
+                format!(
+                    "Failed to read specification file: {}",
+                    params.spec_file.display()
+                )
+            })?;
 
         // Generate checklist
         let mut checklist = String::from("# Implementation & Validation Checklist\n\n");
@@ -176,9 +205,9 @@ impl Tool for ChecklistTool {
         checklist.push_str("- [ ] Migration guide provided (if needed)\n");
 
         // Write checklist
-        tokio::fs::write(&params.output_path, &checklist)
+        tokio::fs::write(&safe_path, &checklist)
             .await
-            .context("Failed to write checklist")?;
+            .with_context(|| format!("Failed to write checklist to: {}", safe_path.display()))?;
 
         let total_items = checklist.matches("- [ ]").count();
 
@@ -191,7 +220,7 @@ impl Tool for ChecklistTool {
             quality standards are maintained throughout implementation.",
             params.spec_file.display(),
             total_items,
-            params.output_path.display()
+            safe_path.display()
         );
 
         Ok(ToolResult {
@@ -235,13 +264,22 @@ mod tests {
         .unwrap();
 
         let params = json!({
-            "spec_file": spec_file.to_str().unwrap(),
+            "spec_file": "spec.md",  // Use relative path
             "include_implementation": true,
             "include_testing": true,
-            "output_path": output_path.to_str().unwrap()
+            "output_path": "checklist.md"  // Use relative path
         });
 
+        // Change to temp directory for test
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(dir.path()).unwrap();
+
         let result = tool.execute(params).await.unwrap();
+
+        // Restore original directory
+        std::env::set_current_dir(original_dir).unwrap();
+
+        // Check result - should succeed now that we're in the right directory
         assert!(result.is_error.is_none() || !result.is_error.unwrap());
         assert!(output_path.exists());
 

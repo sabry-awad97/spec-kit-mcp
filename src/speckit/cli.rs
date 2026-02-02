@@ -146,6 +146,8 @@ impl SpecKitCli {
 
         let command_future = Command::new(&self.cli_path)
             .args(&full_args)
+            .env("PYTHONIOENCODING", "utf-8") // Force UTF-8 encoding for Windows
+            .env("PYTHONUTF8", "1") // Enable UTF-8 mode (Python 3.7+)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output();
