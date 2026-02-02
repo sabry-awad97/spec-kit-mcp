@@ -14,6 +14,21 @@ use crate::mcp::types::{ContentBlock, ToolDefinition, ToolResult};
 use crate::speckit::SpecKitCli;
 use crate::tools::Tool;
 
+/// Helper function to recursively copy a directory
+fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            copy_dir_recursive(&entry.path(), &dst.join(entry.file_name()))?;
+        } else {
+            fs::copy(entry.path(), dst.join(entry.file_name()))?;
+        }
+    }
+    Ok(())
+}
+
 /// Parameters for the speckit_init tool
 #[derive(Debug, Deserialize, Serialize)]
 pub struct InitParams {
@@ -226,13 +241,22 @@ impl InitTool {
         project_path: &Path,
         params: &InitParams,
     ) -> Result<String> {
-        let is_current_dir = project_path == Path::new(".") || project_path == Path::new("");
+        // Determine actual project path
+        // If project_path is ".", create a subdirectory with project_name
+        // Otherwise, use project_path as-is
+        let actual_path = if project_path == Path::new(".") || project_path == Path::new("") {
+            PathBuf::from(project_name)
+        } else {
+            project_path.to_path_buf()
+        };
 
-        // Check if directory already exists (for non-current-dir case)
-        if !is_current_dir && project_path.exists() {
+        let is_current_dir = false; // Always create in subdirectory for MCP
+
+        // Check if directory already exists
+        if actual_path.exists() {
             return Err(anyhow!(
                 "Directory '{}' already exists. Please choose a different project name or remove the existing directory.",
-                project_path.display()
+                actual_path.display()
             ));
         }
 
@@ -242,10 +266,64 @@ impl InitTool {
             .await?;
 
         // Extract template
-        self.extract_template(&zip_data, project_path, is_current_dir)?;
+        self.extract_template(&zip_data, &actual_path, is_current_dir)?;
+
+        // Create .specify directory structure
+        let specify_dir = actual_path.join(".specify");
+        fs::create_dir_all(&specify_dir).context("Failed to create .specify directory")?;
+
+        // Create subdirectories
+        fs::create_dir_all(specify_dir.join("memory"))
+            .context("Failed to create .specify/memory directory")?;
+        fs::create_dir_all(specify_dir.join("scripts"))
+            .context("Failed to create .specify/scripts directory")?;
+        fs::create_dir_all(specify_dir.join("templates"))
+            .context("Failed to create .specify/templates directory")?;
+
+        // Move extracted files into .specify
+        // Move memory/ -> .specify/memory/
+        if actual_path.join("memory").exists() {
+            for entry in fs::read_dir(actual_path.join("memory"))? {
+                let entry = entry?;
+                let dest = specify_dir.join("memory").join(entry.file_name());
+                fs::rename(entry.path(), dest)?;
+            }
+            fs::remove_dir(actual_path.join("memory"))?;
+        }
+
+        // Move scripts/ -> .specify/scripts/
+        if actual_path.join("scripts").exists() {
+            for entry in fs::read_dir(actual_path.join("scripts"))? {
+                let entry = entry?;
+                let dest = specify_dir.join("scripts").join(entry.file_name());
+                if entry.path().is_dir() {
+                    // Move directory recursively
+                    copy_dir_recursive(&entry.path(), &dest)?;
+                    fs::remove_dir_all(entry.path())?;
+                } else {
+                    fs::rename(entry.path(), dest)?;
+                }
+            }
+            fs::remove_dir(actual_path.join("scripts"))?;
+        }
+
+        // Move templates/ -> .specify/templates/
+        if actual_path.join("templates").exists() {
+            for entry in fs::read_dir(actual_path.join("templates"))? {
+                let entry = entry?;
+                let dest = specify_dir.join("templates").join(entry.file_name());
+                if entry.path().is_dir() {
+                    copy_dir_recursive(&entry.path(), &dest)?;
+                    fs::remove_dir_all(entry.path())?;
+                } else {
+                    fs::rename(entry.path(), dest)?;
+                }
+            }
+            fs::remove_dir(actual_path.join("templates"))?;
+        }
 
         // Verify .specify directory was created
-        let specify_dir = project_path.join(".specify");
+        let specify_dir = actual_path.join(".specify");
         if !specify_dir.exists() {
             return Err(anyhow!(
                 "Template extraction failed: .specify directory not found"
@@ -254,15 +332,15 @@ impl InitTool {
 
         // Setup agent configuration
         let agent_id = params.ai_assistant.as_deref().unwrap_or("claude");
-        self.setup_agent_config(project_path, agent_id)?;
+        self.setup_agent_config(&actual_path, agent_id)?;
 
         // Setup script permissions (Unix only)
         #[cfg(unix)]
-        self.ensure_scripts_executable(project_path)?;
+        self.ensure_scripts_executable(&actual_path)?;
 
         // Initialize git repository (if not disabled)
         let git_initialized = if !params.no_git {
-            self.init_git_repo(project_path).await.is_ok()
+            self.init_git_repo(&actual_path).await.is_ok()
         } else {
             false
         };
@@ -271,7 +349,7 @@ impl InitTool {
         let mut message = format!(
             "Successfully initialized spec-kit project '{}' at {}\n\n",
             project_name,
-            project_path.display()
+            actual_path.display()
         );
 
         message.push_str("Configuration:\n");
@@ -293,12 +371,10 @@ impl InitTool {
         ));
 
         message.push_str("\nNext steps:\n");
-        if !is_current_dir {
-            message.push_str(&format!(
-                "1. Navigate to the project: cd {}\n",
-                project_name
-            ));
-        }
+        message.push_str(&format!(
+            "1. Navigate to the project: cd {}\n",
+            project_name
+        ));
         message.push_str("2. Create constitution: Use speckit_constitution tool\n");
         message.push_str("3. Define requirements: Use speckit_specify tool\n");
         message.push_str("4. Create technical plan: Use speckit_plan tool\n");
