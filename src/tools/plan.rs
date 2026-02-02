@@ -124,53 +124,23 @@ impl Tool for PlanTool {
                 )
             })?;
 
-        // Get the plan template
-        let template = crate::templates::PLAN_TEMPLATE;
-
-        // Create a basic plan using the template
-        let mut content = template.replace("[FEATURE]", "Feature").replace(
-            "[DATE]",
-            &chrono::Local::now().format("%Y-%m-%d").to_string(),
-        );
-
-        // Add tech stack if provided
-        if let Some(tech_stack) = params.tech_stack {
-            content = content.replace(
-                "**Language/Version**: [e.g., Typescript, Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]",
-                &format!("**Language/Version**: {}", tech_stack)
-            );
-        }
-
-        // Add reference to the specification
-        content.push_str(&format!(
-            "\n\n## Specification Reference\n\n```\n{}\n```\n",
-            spec_content
-        ));
-
-        // Ensure parent directory exists
-        if let Some(parent) = safe_path.parent() {
-            tokio::fs::create_dir_all(parent).await.with_context(|| {
-                format!("Failed to create parent directory: {}", parent.display())
-            })?;
-        }
-
-        // Write plan file
-        tokio::fs::write(&safe_path, content)
-            .await
-            .with_context(|| format!("Failed to write plan file to: {}", safe_path.display()))?;
-
+        // Return instructions for AI to follow - DO NOT write template file yet
         let message = format!(
-            "Technical plan created successfully at {}\n\n\
-            The plan includes:\n\
-            - Architecture and system design\n\
-            - Technology stack and frameworks\n\
-            - Implementation approach\n\
-            - Module breakdown\n\n\
-            Next step: Use speckit_tasks tool to generate actionable tasks\n\n\
+            "## Task: Create Technical Implementation Plan\n\n\
+            **Output File**: {}\n\n\
+            **Specification File**: {}\n\n\
+            **Tech Stack**:\n```\n{}\n```\n\n\
+            **Specification Content**:\n```\n{}\n```\n\n\
             ---\n\n\
-            ## How to use this tool\n\n\
+            ## Instructions\n\n\
+            You must now follow the detailed workflow below to generate a complete technical plan.\n\
+            After generating the content, write it to the output file path above.\n\n\
+            **IMPORTANT**: Do NOT write placeholder content. Generate fully populated content following the instructions.\n\n\
             {}",
             safe_path.display(),
+            params.spec_file.display(),
+            params.tech_stack.as_deref().unwrap_or("(not specified - you should determine appropriate stack)"),
+            spec_content,
             crate::templates::PLAN_COMMAND
         );
 
@@ -184,6 +154,7 @@ impl Tool for PlanTool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
     use tempfile::tempdir;
     use tokio::fs;
 
@@ -208,28 +179,26 @@ mod tests {
         let specify_dir = dir.path().join(".specify");
         fs::create_dir(&specify_dir).await.unwrap();
 
-        let spec_file = dir.path().join("spec.md");
-        let _output_path = dir.path().join("plan.md");
-
-        // Create dummy spec file
-        fs::write(&spec_file, "Test specification").await.unwrap();
-
-        let params = json!({
-            "spec_file": "spec.md",  // Use relative path
-            "tech_stack": "Rust + Tokio",
-            "output_path": "plan.md"  // Use relative path
-        });
-
-        // Change to temp directory for test
+        // Change to temp directory FIRST
         let original_dir = std::env::current_dir().unwrap();
         std::env::set_current_dir(dir.path()).unwrap();
+
+        let spec_file = Path::new("spec.md");
+        // Create dummy spec file in current directory
+        fs::write(spec_file, "Test specification").await.unwrap();
+
+        let params = json!({
+            "spec_file": "spec.md",
+            "tech_stack": "Rust + Tokio",
+            "output_path": "plan.md"
+        });
 
         let result = tool.execute(params).await.unwrap();
 
         // Restore original directory
         std::env::set_current_dir(original_dir).unwrap();
 
-        // Check result - should succeed now that we're in the right directory
+        // Check result - tool should return instructions, not write file
         assert!(result.is_error.is_none() || !result.is_error.unwrap());
     }
 }

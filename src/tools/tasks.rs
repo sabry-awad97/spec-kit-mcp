@@ -126,45 +126,23 @@ impl Tool for TasksTool {
             .await
             .with_context(|| format!("Failed to read plan file: {}", params.plan_file.display()))?;
 
-        // Get the tasks template
-        let template = crate::templates::TASKS_TEMPLATE;
-
-        // Create tasks using the template
-        let content = template
-            .replace("[FEATURE NAME]", "Feature")
-            .replace(
-                "**Input**: Design documents from `/specs/[###-feature-name]/`",
-                &format!("**Input**: Plan from {}", params.plan_file.display())
-            )
-            .replace(
-                "**Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/",
-                &format!("**Prerequisites**: {}", params.plan_file.display())
-            ) + &format!("\n\n## Plan Reference\n\n```\n{}\n```\n", plan_content);
-
-        // Ensure parent directory exists
-        if let Some(parent) = safe_path.parent() {
-            tokio::fs::create_dir_all(parent).await.with_context(|| {
-                format!("Failed to create parent directory: {}", parent.display())
-            })?;
-        }
-
-        // Write tasks file
-        tokio::fs::write(&safe_path, content)
-            .await
-            .with_context(|| format!("Failed to write tasks file to: {}", safe_path.display()))?;
-
+        // Return instructions for AI to follow - DO NOT write template file yet
         let message = format!(
-            "Task list generated successfully at {}\n\n\
-            The task list includes:\n\
-            - Prioritized actionable items\n\
-            - Clear acceptance criteria\n\
-            - Dependencies between tasks\n\
-            - Estimated effort levels\n\n\
-            Next step: Use speckit_implement tool to execute the tasks\n\n\
+            "## Task: Generate Actionable Task List\n\n\
+            **Output File**: {}\n\n\
+            **Plan File**: {}\n\n\
+            **Breakdown Level**: {}\n\n\
+            **Plan Content**:\n```\n{}\n```\n\n\
             ---\n\n\
-            ## How to use this tool\n\n\
+            ## Instructions\n\n\
+            You must now follow the detailed workflow below to generate a complete task list.\n\
+            After generating the content, write it to the output file path above.\n\n\
+            **IMPORTANT**: Do NOT write placeholder content. Generate fully populated content following the instructions.\n\n\
             {}",
             safe_path.display(),
+            params.plan_file.display(),
+            params.breakdown_level,
+            plan_content,
             crate::templates::TASKS_COMMAND
         );
 
@@ -178,6 +156,7 @@ impl Tool for TasksTool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
     use tempfile::tempdir;
     use tokio::fs;
 
@@ -202,28 +181,26 @@ mod tests {
         let specify_dir = dir.path().join(".specify");
         fs::create_dir(&specify_dir).await.unwrap();
 
-        let plan_file = dir.path().join("plan.md");
-        let _output_path = dir.path().join("tasks.md");
-
-        // Create dummy plan file
-        fs::write(&plan_file, "Test plan").await.unwrap();
-
-        let params = json!({
-            "plan_file": "plan.md",  // Use relative path
-            "breakdown_level": "medium",
-            "output_path": "tasks.md"  // Use relative path
-        });
-
-        // Change to temp directory for test
+        // Change to temp directory FIRST
         let original_dir = std::env::current_dir().unwrap();
         std::env::set_current_dir(dir.path()).unwrap();
+
+        let plan_file = Path::new("plan.md");
+        // Create dummy plan file in current directory
+        fs::write(plan_file, "Test plan").await.unwrap();
+
+        let params = json!({
+            "plan_file": "plan.md",
+            "breakdown_level": "medium",
+            "output_path": "tasks.md"
+        });
 
         let result = tool.execute(params).await.unwrap();
 
         // Restore original directory
         std::env::set_current_dir(original_dir).unwrap();
 
-        // Check result - should succeed now that we're in the right directory
+        // Check result - tool should return instructions, not write file
         assert!(result.is_error.is_none() || !result.is_error.unwrap());
     }
 }

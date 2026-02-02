@@ -116,79 +116,29 @@ impl Tool for ClarifyTool {
                 )
             })?;
 
-        // Analyze for common ambiguities
-        let mut clarifications = Vec::new();
-
-        // Check for vague terms
-        let vague_terms = ["maybe", "probably", "might", "could", "should consider"];
-        for term in &vague_terms {
-            if spec_content.to_lowercase().contains(term) {
-                clarifications.push(format!(
-                    "Found vague term '{}' - needs concrete definition",
-                    term
-                ));
-            }
-        }
-
-        // Check for missing details
-        if !spec_content.to_lowercase().contains("performance") {
-            clarifications.push("Performance requirements not specified".to_string());
-        }
-        if !spec_content.to_lowercase().contains("error") {
-            clarifications.push("Error handling approach not specified".to_string());
-        }
-        if !spec_content.to_lowercase().contains("test") {
-            clarifications.push("Testing strategy not specified".to_string());
-        }
-
-        // Add user-provided questions
-        if let Some(questions) = params.questions {
-            clarifications.extend(questions.into_iter().map(|q| format!("Question: {}", q)));
-        }
-
-        // Create clarification document
-        let mut content = String::from("# Specification Clarifications\n\n");
-        content.push_str(&format!("Source: {}\n\n", params.spec_file.display()));
-        content.push_str("## Issues Found\n\n");
-
-        if clarifications.is_empty() {
-            content.push_str("✓ No major ambiguities detected.\n");
-            content.push_str("\nThe specification appears well-defined.\n");
-        } else {
-            for (i, clarification) in clarifications.iter().enumerate() {
-                content.push_str(&format!("{}. {}\n", i + 1, clarification));
-            }
-            content.push_str("\n## Recommendations\n\n");
-            content.push_str("1. Address each issue above\n");
-            content.push_str("2. Update the specification with concrete details\n");
-            content.push_str("3. Review with stakeholders\n");
-            content.push_str("4. Re-run clarify to verify improvements\n");
-        }
-
-        // Write clarifications
-        tokio::fs::write(&safe_path, &content)
-            .await
-            .with_context(|| {
-                format!("Failed to write clarifications to: {}", safe_path.display())
-            })?;
-
+        // Return instructions for AI to follow - DO NOT write file yet
         let message = format!(
-            "Clarification analysis complete!\n\n\
-            Analyzed: {}\n\
-            Issues found: {}\n\
-            Output: {}\n\n\
-            {}\n\n\
+            "## Task: Clarify Specification\n\n\
+            **Specification File**: {}\n\n\
+            **Output File**: {}\n\n\
+            **User Questions**:\n```\n{}\n```\n\n\
+            **Specification Content**:\n```\n{}\n```\n\n\
             ---\n\n\
-            ## How to use this tool\n\n\
+            ## Instructions\n\n\
+            You must now follow the detailed workflow below to identify ambiguities and generate clarifications.\n\
+            After generating the content, write it to the output file path above.\n\n\
+            **IMPORTANT**: \n\
+            - Identify vague terms, missing details, and ambiguous requirements\n\
+            - Generate specific, actionable clarification questions\n\
+            - Provide context for each question\n\
+            - Do NOT write placeholder content\n\n\
             {}",
             params.spec_file.display(),
-            clarifications.len(),
             safe_path.display(),
-            if clarifications.is_empty() {
-                "✓ Specification is well-defined"
-            } else {
-                "⚠ Please review and address the identified issues"
-            },
+            params.questions.as_ref()
+                .map(|q| q.join("\n"))
+                .unwrap_or_else(|| "(auto-detect ambiguities)".to_string()),
+            spec_content,
             crate::templates::CLARIFY_COMMAND
         );
 
@@ -202,6 +152,7 @@ impl Tool for ClarifyTool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
     use tempfile::tempdir;
     use tokio::fs;
 
@@ -221,33 +172,28 @@ mod tests {
         let tool = ClarifyTool::new(cli);
 
         let dir = tempdir().unwrap();
-        let spec_file = dir.path().join("spec.md");
-        let output_path = dir.path().join("clarify.md");
 
-        // Create spec with ambiguities
-        fs::write(
-            &spec_file,
-            "We might add OAuth. Performance should be good.",
-        )
-        .await
-        .unwrap();
-
-        let params = json!({
-            "spec_file": "spec.md",  // Use relative path
-            "output_path": "clarify.md"  // Use relative path
-        });
-
-        // Change to temp directory for test
+        // Change to temp directory FIRST
         let original_dir = std::env::current_dir().unwrap();
         std::env::set_current_dir(dir.path()).unwrap();
+
+        let spec_file = Path::new("spec.md");
+        // Create spec with ambiguities in current directory
+        fs::write(spec_file, "We might add OAuth. Performance should be good.")
+            .await
+            .unwrap();
+
+        let params = json!({
+            "spec_file": "spec.md",
+            "output_path": "clarify.md"
+        });
 
         let result = tool.execute(params).await.unwrap();
 
         // Restore original directory
         std::env::set_current_dir(original_dir).unwrap();
 
-        // Check result - should succeed now that we're in the right directory
+        // Check result - tool should return instructions, not write file
         assert!(result.is_error.is_none() || !result.is_error.unwrap());
-        assert!(output_path.exists());
     }
 }

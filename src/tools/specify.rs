@@ -120,50 +120,21 @@ impl Tool for SpecifyTool {
             }
         };
 
-        // Get the specification template
-        let template = crate::templates::SPEC_TEMPLATE;
-
-        // Format the specification content using the template
-        let mut content = template
-            .replace("[FEATURE NAME]", "Feature")
-            .replace("$ARGUMENTS", &params.requirements);
-
-        // Add user stories if provided
-        if let Some(stories) = params.user_stories {
-            content = content.replace(
-                "### User Story 1 - [Brief Title] (Priority: P1)",
-                &format!("### User Stories\n\n{}", stories),
-            );
-        }
-
-        // Ensure parent directory exists
-        if let Some(parent) = safe_path.parent() {
-            tokio::fs::create_dir_all(parent).await.with_context(|| {
-                format!("Failed to create parent directory: {}", parent.display())
-            })?;
-        }
-
-        // Write specification file
-        tokio::fs::write(&safe_path, content)
-            .await
-            .with_context(|| {
-                format!(
-                    "Failed to write specification file to: {}",
-                    safe_path.display()
-                )
-            })?;
-
+        // Return instructions for AI to follow - DO NOT write template file yet
         let message = format!(
-            "Specification created successfully at {}\n\n\
-            The specification defines:\n\
-            - What needs to be built (requirements)\n\
-            - Who it's for and why (user stories)\n\
-            - Success criteria (acceptance criteria)\n\n\
-            Next step: Use speckit_plan tool to create a technical plan\n\n\
+            "## Task: Create Specification\n\n\
+            **Output File**: {}\n\n\
+            **User Requirements**:\n```\n{}\n```\n\n\
+            **User Stories**:\n```\n{}\n```\n\n\
             ---\n\n\
-            ## How to use this tool\n\n\
+            ## Instructions\n\n\
+            You must now follow the detailed workflow below to generate a complete specification.\n\
+            After generating the content, write it to the output file path above.\n\n\
+            **IMPORTANT**: Do NOT write placeholder content. Generate fully populated content following the instructions.\n\n\
             {}",
             safe_path.display(),
+            params.requirements,
+            params.user_stories.as_deref().unwrap_or("(none provided)"),
             crate::templates::SPECIFY_COMMAND
         );
 
@@ -200,12 +171,10 @@ mod tests {
         let specify_dir = dir.path().join(".specify");
         tokio::fs::create_dir(&specify_dir).await.unwrap();
 
-        let output_path = dir.path().join("specification.md");
-
         let params = json!({
             "requirements": "User authentication system with OAuth2 support",
             "user_stories": "As a user, I want to login with Google, so that I don't need another password",
-            "output_path": "specification.md"  // Use relative path
+            "output_path": "specification.md"
         });
 
         // Change to temp directory for test
@@ -217,8 +186,9 @@ mod tests {
         // Restore original directory
         std::env::set_current_dir(original_dir).unwrap();
 
-        // Check result - should succeed now that we're in the right directory
+        // Check result - tool should return instructions, not write file
         assert!(result.is_error.is_none() || !result.is_error.unwrap());
-        assert!(output_path.exists());
+        // File should NOT exist yet - AI will create it after following instructions
+        // assert!(!output_path.exists());
     }
 }

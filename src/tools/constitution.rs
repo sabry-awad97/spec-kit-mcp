@@ -105,48 +105,21 @@ impl Tool for ConstitutionTool {
             }
         };
 
-        // Get the constitution template
-        let template = crate::templates::CONSTITUTION_TEMPLATE;
-
-        // Format the constitution content using the template
-        let mut content = template
-            .replace("[PROJECT_NAME]", "Project")
-            .replace("[PRINCIPLE_1_NAME]", "Core Principles")
-            .replace("[PRINCIPLE_1_DESCRIPTION]", &params.principles);
-
-        if let Some(constraints) = params.constraints {
-            content = content.replace("[SECTION_2_NAME]", "Technical Constraints");
-            content = content.replace("[SECTION_2_CONTENT]", &constraints);
-        }
-
-        // Ensure parent directory exists
-        if let Some(parent) = safe_path.parent() {
-            tokio::fs::create_dir_all(parent).await.with_context(|| {
-                format!("Failed to create parent directory: {}", parent.display())
-            })?;
-        }
-
-        // Write constitution file
-        tokio::fs::write(&safe_path, content)
-            .await
-            .with_context(|| {
-                format!(
-                    "Failed to write constitution file to: {}",
-                    safe_path.display()
-                )
-            })?;
-
+        // Return instructions for AI to follow - DO NOT write template file yet
         let message = format!(
-            "Constitution created successfully at {}\n\n\
-            The constitution defines:\n\
-            - Core principles that guide development\n\
-            - Technical constraints and boundaries\n\
-            - Standards for code quality and architecture\n\n\
-            Next step: Use speckit_specify tool to define requirements\n\n\
+            "## Task: Create Project Constitution\n\n\
+            **Output File**: {}\n\n\
+            **Principles**:\n```\n{}\n```\n\n\
+            **Constraints**:\n```\n{}\n```\n\n\
             ---\n\n\
-            ## How to use this tool\n\n\
+            ## Instructions\n\n\
+            You must now follow the detailed workflow below to generate a complete constitution.\n\
+            After generating the content, write it to the output file path above.\n\n\
+            **IMPORTANT**: Do NOT write placeholder content. Generate fully populated content following the instructions.\n\n\
             {}",
             safe_path.display(),
+            params.principles,
+            params.constraints.as_deref().unwrap_or("(none provided)"),
             crate::templates::CONSTITUTION_COMMAND
         );
 
@@ -186,7 +159,7 @@ mod tests {
         let params = json!({
             "principles": "Simplicity, Performance, Security",
             "constraints": "Must support Python 3.11+",
-            "output_path": "constitution.md"  // Use relative path
+            "output_path": "constitution.md"
         });
 
         // Change to temp directory for test
@@ -195,11 +168,12 @@ mod tests {
 
         let result = tool.execute(params).await.unwrap();
 
-        // Check result while still in temp directory
-        assert!(result.is_error.is_none() || !result.is_error.unwrap());
-        assert!(std::path::Path::new("constitution.md").exists());
-
         // Restore original directory
         std::env::set_current_dir(original_dir).unwrap();
+
+        // Check result - tool should return instructions, not write file
+        assert!(result.is_error.is_none() || !result.is_error.unwrap());
+        // File should NOT exist yet - AI will create it after following instructions
+        // assert!(!std::path::Path::new("constitution.md").exists());
     }
 }

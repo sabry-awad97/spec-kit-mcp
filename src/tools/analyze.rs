@@ -111,8 +111,17 @@ impl Tool for AnalyzeTool {
             }
         };
 
-        let mut analysis = String::from("# Spec-Kit Analysis Report\n\n");
-        analysis.push_str(&format!("Project: {}\n\n", params.project_path.display()));
+        // Validate project path exists
+        if !params.project_path.exists() {
+            return Ok(ToolResult {
+                content: vec![ContentBlock::text(format!(
+                    "Project path does not exist: {}\n\n\
+                    Please provide a valid project directory.",
+                    params.project_path.display()
+                ))],
+                is_error: Some(true),
+            });
+        }
 
         // Check for artifacts
         let artifacts = vec![
@@ -122,132 +131,50 @@ impl Tool for AnalyzeTool {
             ("Tasks", "speckit.tasks"),
         ];
 
-        analysis.push_str("## Artifact Status\n\n");
+        let mut artifact_info = String::new();
+        let mut found_count = 0;
 
-        let mut found_artifacts = Vec::new();
         for (name, filename) in &artifacts {
             let path = params.project_path.join(filename);
             if path.exists() {
-                analysis.push_str(&format!("✓ {} found\n", name));
-                found_artifacts.push((*name, path));
+                artifact_info.push_str(&format!("✓ {} found at {}\n", name, path.display()));
+                found_count += 1;
             } else {
-                analysis.push_str(&format!("✗ {} missing\n", name));
+                artifact_info.push_str(&format!(
+                    "✗ {} missing (expected at {})\n",
+                    name,
+                    path.display()
+                ));
             }
         }
 
-        // Consistency checks
-        if params.check_consistency && found_artifacts.len() >= 2 {
-            analysis.push_str("\n## Consistency Analysis\n\n");
-
-            // Read all artifacts
-            let mut contents = Vec::new();
-            for (name, path) in &found_artifacts {
-                match tokio::fs::read_to_string(path).await {
-                    Ok(content) => contents.push((*name, content)),
-                    Err(e) => analysis.push_str(&format!("⚠ Failed to read {}: {}\n", name, e)),
-                }
-            }
-
-            // Check for keywords mentioned in spec but missing in plan
-            if contents.len() >= 2 {
-                let spec_content = contents
-                    .iter()
-                    .find(|(n, _)| n.contains("Spec"))
-                    .map(|(_, c)| c);
-                let plan_content = contents
-                    .iter()
-                    .find(|(n, _)| n.contains("Plan"))
-                    .map(|(_, c)| c);
-
-                if let (Some(spec), Some(plan)) = (spec_content, plan_content) {
-                    // Extract key terms from spec
-                    let important_terms = spec
-                        .split_whitespace()
-                        .filter(|w| w.len() > 5 && w.chars().next().unwrap().is_uppercase())
-                        .take(10)
-                        .collect::<Vec<_>>();
-
-                    let mut missing = Vec::new();
-                    for term in important_terms {
-                        if !plan.contains(term) {
-                            missing.push(term);
-                        }
-                    }
-
-                    if missing.is_empty() {
-                        analysis.push_str("✓ Key terms from specification are addressed in plan\n");
-                    } else {
-                        analysis.push_str("⚠ Terms in spec but not in plan:\n");
-                        for term in missing {
-                            analysis.push_str(&format!("  - {}\n", term));
-                        }
-                    }
-                }
-            }
-        }
-
-        // Coverage checks
-        if params.check_coverage {
-            analysis.push_str("\n## Coverage Analysis\n\n");
-
-            if found_artifacts
-                .iter()
-                .any(|(n, _)| n.contains("Specification"))
-            {
-                analysis.push_str("✓ Requirements are specified\n");
-            } else {
-                analysis.push_str("✗ Missing specification\n");
-            }
-
-            if found_artifacts.iter().any(|(n, _)| n.contains("Plan")) {
-                analysis.push_str("✓ Technical plan exists\n");
-            } else {
-                analysis.push_str("✗ Missing technical plan\n");
-            }
-
-            if found_artifacts.iter().any(|(n, _)| n.contains("Tasks")) {
-                analysis.push_str("✓ Tasks are defined\n");
-            } else {
-                analysis.push_str("✗ Missing task breakdown\n");
-            }
-        }
-
-        // Recommendations
-        analysis.push_str("\n## Recommendations\n\n");
-
-        if found_artifacts.len() < 4 {
-            analysis.push_str("1. Complete missing artifacts\n");
-        }
-        analysis.push_str("2. Review consistency issues (if any)\n");
-        analysis.push_str("3. Ensure all requirements are covered in tasks\n");
-        analysis.push_str("4. Keep artifacts updated as project evolves\n");
-
-        // Write analysis
-        tokio::fs::write(&safe_output_path, &analysis)
-            .await
-            .with_context(|| {
-                format!(
-                    "Failed to write analysis to: {}",
-                    safe_output_path.display()
-                )
-            })?;
-
+        // Return instructions for AI to follow - DO NOT write file yet
         let message = format!(
-            "Analysis complete!\n\n\
-            Artifacts found: {}/{}\n\
-            Report: {}\n\n\
+            "## Task: Analyze Project Artifacts\n\n\
+            **Project Path**: {}\n\n\
+            **Output File**: {}\n\n\
+            **Check Consistency**: {}\n\
+            **Check Coverage**: {}\n\n\
+            **Artifacts Found**: {}/{}\n\n\
             {}\n\n\
             ---\n\n\
-            ## How to use this tool\n\n\
+            ## Instructions\n\n\
+            You must now follow the detailed workflow below to analyze cross-artifact consistency.\n\
+            After generating the content, write it to the output file path above.\n\n\
+            **IMPORTANT**: \n\
+            - Read all available artifacts\n\
+            - Check for consistency between constitution, spec, plan, and tasks\n\
+            - Verify all requirements are covered\n\
+            - Identify gaps and inconsistencies\n\
+            - Do NOT write placeholder content\n\n\
             {}",
-            found_artifacts.len(),
-            artifacts.len(),
+            params.project_path.display(),
             safe_output_path.display(),
-            if found_artifacts.len() == artifacts.len() {
-                "✓ All artifacts present"
-            } else {
-                "⚠ Some artifacts are missing"
-            },
+            params.check_consistency,
+            params.check_coverage,
+            found_count,
+            artifacts.len(),
+            artifact_info,
             crate::templates::ANALYZE_COMMAND
         );
 
@@ -290,7 +217,7 @@ mod tests {
             .unwrap();
 
         let params = json!({
-            "project_path": ".",  // Use current directory
+            "project_path": ".",
             "check_consistency": true,
             "check_coverage": true
         });
@@ -304,7 +231,7 @@ mod tests {
         // Restore original directory
         std::env::set_current_dir(original_dir).unwrap();
 
-        // Check result - should succeed now that we're in the right directory
+        // Check result - tool should return instructions, not write file
         assert!(result.is_error.is_none() || !result.is_error.unwrap());
     }
 }

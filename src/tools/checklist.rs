@@ -129,101 +129,29 @@ impl Tool for ChecklistTool {
                 )
             })?;
 
-        // Generate checklist
-        let mut checklist = String::from("# Implementation & Validation Checklist\n\n");
-        checklist.push_str(&format!("Based on: {}\n\n", params.spec_file.display()));
-
-        // Requirements checklist
-        checklist.push_str("## Requirements Validation\n\n");
-
-        // Extract requirements (simple heuristic)
-        let mut req_count = 0;
-        for line in spec_content.lines() {
-            if line.trim().starts_with('-')
-                || line.trim().starts_with('*')
-                || line.contains("shall")
-                || line.contains("must")
-                || line.contains("should")
-            {
-                req_count += 1;
-                let requirement = line
-                    .trim()
-                    .trim_start_matches('-')
-                    .trim_start_matches('*')
-                    .trim();
-                if !requirement.is_empty() && requirement.len() < 100 {
-                    checklist.push_str(&format!("- [ ] {}\n", requirement));
-                }
-            }
-        }
-
-        if req_count == 0 {
-            checklist.push_str("- [ ] All specified requirements are implemented\n");
-            checklist.push_str("- [ ] Edge cases are handled\n");
-            checklist.push_str("- [ ] Error conditions are addressed\n");
-        }
-
-        // Implementation checklist
-        if params.include_implementation {
-            checklist.push_str("\n## Implementation Checklist\n\n");
-            checklist.push_str("- [ ] Code follows project style guide\n");
-            checklist.push_str("- [ ] Functions have clear documentation\n");
-            checklist.push_str("- [ ] Error handling is comprehensive\n");
-            checklist.push_str("- [ ] Input validation is performed\n");
-            checklist.push_str("- [ ] Logging is appropriate\n");
-            checklist.push_str("- [ ] Performance is acceptable\n");
-            checklist.push_str("- [ ] Security considerations addressed\n");
-        }
-
-        // Testing checklist
-        if params.include_testing {
-            checklist.push_str("\n## Testing Checklist\n\n");
-            checklist.push_str("- [ ] Unit tests written for all functions\n");
-            checklist.push_str("- [ ] Integration tests cover main workflows\n");
-            checklist.push_str("- [ ] Edge cases are tested\n");
-            checklist.push_str("- [ ] Error conditions are tested\n");
-            checklist.push_str("- [ ] Performance tests (if applicable)\n");
-            checklist.push_str("- [ ] All tests pass\n");
-            checklist.push_str("- [ ] Test coverage >80%\n");
-        }
-
-        // Quality checklist
-        checklist.push_str("\n## Quality Assurance\n\n");
-        checklist.push_str("- [ ] Code review completed\n");
-        checklist.push_str("- [ ] Documentation updated\n");
-        checklist.push_str("- [ ] CHANGELOG.md updated\n");
-        checklist.push_str("- [ ] No compiler warnings\n");
-        checklist.push_str("- [ ] Linter passes (clippy, etc.)\n");
-        checklist.push_str("- [ ] Dependencies are up to date\n");
-
-        // Deployment checklist
-        checklist.push_str("\n## Deployment Readiness\n\n");
-        checklist.push_str("- [ ] All tests pass in CI\n");
-        checklist.push_str("- [ ] Version number updated\n");
-        checklist.push_str("- [ ] Release notes prepared\n");
-        checklist.push_str("- [ ] Breaking changes documented\n");
-        checklist.push_str("- [ ] Migration guide provided (if needed)\n");
-
-        // Write checklist
-        tokio::fs::write(&safe_path, &checklist)
-            .await
-            .with_context(|| format!("Failed to write checklist to: {}", safe_path.display()))?;
-
-        let total_items = checklist.matches("- [ ]").count();
-
+        // Return instructions for AI to follow - DO NOT write file yet
         let message = format!(
-            "Validation checklist generated!\n\n\
-            Source: {}\n\
-            Total items: {}\n\
-            Output: {}\n\n\
-            Use this checklist to ensure all requirements are met and\n\
-            quality standards are maintained throughout implementation.\n\n\
+            "## Task: Generate Validation Checklist\n\n\
+            **Specification File**: {}\n\n\
+            **Output File**: {}\n\n\
+            **Include Implementation**: {}\n\
+            **Include Testing**: {}\n\n\
+            **Specification Content**:\n```\n{}\n```\n\n\
             ---\n\n\
-            ## How to use this tool\n\n\
+            ## Instructions\n\n\
+            You must now follow the detailed workflow below to generate a validation checklist.\n\
+            After generating the content, write it to the output file path above.\n\n\
+            **IMPORTANT**: \n\
+            - Extract all requirements from the specification\n\
+            - Create specific, testable checklist items\n\
+            - Organize by category (requirements, implementation, testing, quality)\n\
+            - Do NOT write placeholder content\n\n\
             {}",
             params.spec_file.display(),
-            total_items,
             safe_path.display(),
+            params.include_implementation,
+            params.include_testing,
+            spec_content,
             crate::templates::CHECKLIST_COMMAND
         );
 
@@ -237,6 +165,7 @@ impl Tool for ChecklistTool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
     use tempfile::tempdir;
     use tokio::fs;
 
@@ -256,39 +185,33 @@ mod tests {
         let tool = ChecklistTool::new(cli);
 
         let dir = tempdir().unwrap();
-        let spec_file = dir.path().join("spec.md");
-        let output_path = dir.path().join("checklist.md");
 
-        // Create spec with requirements
+        // Change to temp directory FIRST
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(dir.path()).unwrap();
+
+        let spec_file = Path::new("spec.md");
+        // Create spec with requirements in current directory
         fs::write(
-            &spec_file,
+            spec_file,
             "- User must login\n- System shall validate input\n- Should handle errors",
         )
         .await
         .unwrap();
 
         let params = json!({
-            "spec_file": "spec.md",  // Use relative path
+            "spec_file": "spec.md",
             "include_implementation": true,
             "include_testing": true,
-            "output_path": "checklist.md"  // Use relative path
+            "output_path": "checklist.md"
         });
-
-        // Change to temp directory for test
-        let original_dir = std::env::current_dir().unwrap();
-        std::env::set_current_dir(dir.path()).unwrap();
 
         let result = tool.execute(params).await.unwrap();
 
         // Restore original directory
         std::env::set_current_dir(original_dir).unwrap();
 
-        // Check result - should succeed now that we're in the right directory
+        // Check result - tool should return instructions, not write file
         assert!(result.is_error.is_none() || !result.is_error.unwrap());
-        assert!(output_path.exists());
-
-        // Verify checklist has items
-        let content = fs::read_to_string(output_path).await.unwrap();
-        assert!(content.contains("- [ ]"));
     }
 }

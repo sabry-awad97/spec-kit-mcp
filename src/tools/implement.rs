@@ -113,32 +113,26 @@ impl Tool for ImplementTool {
                 format!("Failed to read tasks file: {}", params.task_file.display())
             })?;
 
-        // For now, we return guidance since actual implementation
-        // requires AI-generated code based on specs
+        // Return instructions for AI to follow
         let message = format!(
-            "Implementation guidance based on {}\n\n\
-            The task file contains the following items:\n\
-            {}\n\n\
-            Implementation approach:\n\
-            1. Review each task in the task list\n\
-            2. Implement tasks in order, respecting dependencies\n\
-            3. Write tests alongside implementation\n\
-            4. Update documentation as you go\n\
-            5. Commit after completing each logical unit\n\n\
-            Context: {}\n\n\
-            Output directory: {}\n\n\
-            Next step: Begin implementing the first task\n\n\
+            "## Task: Execute Implementation\n\n\
+            **Task File**: {}\n\n\
+            **Output Directory**: {}\n\n\
+            **Additional Context**:\n```\n{}\n```\n\n\
+            **Tasks Content**:\n```\n{}\n```\n\n\
             ---\n\n\
-            ## How to use this tool\n\n\
+            ## Instructions\n\n\
+            You must now follow the detailed workflow below to implement the tasks.\n\n\
+            **IMPORTANT**: \n\
+            - Implement each task in order, respecting dependencies\n\
+            - Write complete, working code (no placeholders)\n\
+            - Create files in the output directory specified above\n\
+            - Follow the technical plan and specifications\n\n\
             {}",
             params.task_file.display(),
-            tasks_content
-                .lines()
-                .take(10)
-                .collect::<Vec<_>>()
-                .join("\n"),
-            params.context.as_deref().unwrap_or("None provided"),
             safe_output_dir.display(),
+            params.context.as_deref().unwrap_or("(none provided)"),
+            tasks_content,
             crate::templates::IMPLEMENT_COMMAND
         );
 
