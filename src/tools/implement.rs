@@ -165,22 +165,22 @@ mod tests {
         let tool = ImplementTool::new(validator);
 
         let dir = tempdir().unwrap();
-        let task_file = dir.path().join("tasks.md");
 
-        // Create dummy task file
+        // Create dummy task file using absolute path
+        let task_file = dir.path().join("tasks.md");
         fs::write(&task_file, "Task 1: Implement feature\nTask 2: Write tests")
             .await
             .unwrap();
+
+        // Change to temp directory for validation
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(dir.path()).unwrap();
 
         let params = json!({
             "task_file": "tasks.md",  // Use relative path
             "context": "Using Rust 2021 edition",
             "output_dir": "src"  // Use relative path
         });
-
-        // Change to temp directory for test
-        let original_dir = std::env::current_dir().unwrap();
-        std::env::set_current_dir(dir.path()).unwrap();
 
         let result = tool.execute(params).await.unwrap();
 

@@ -10,7 +10,9 @@ use std::path::PathBuf;
 
 use crate::mcp::types::{ContentBlock, ToolDefinition, ToolResult};
 use crate::tools::Tool;
-use crate::utils::{validate_file_exists, validate_project_initialized, validate_safe_path};
+use crate::utils::{
+    validate_file_exists, validate_project_initialized_for_path, validate_safe_path,
+};
 use crate::validation::InputValidator;
 
 /// Parameters for the speckit_tasks tool
@@ -90,8 +92,8 @@ impl Tool for TasksTool {
             "Generating task list"
         );
 
-        // Validate project is initialized
-        if let Err(msg) = validate_project_initialized() {
+        // Validate project is initialized (check in output path's directory)
+        if let Err(msg) = validate_project_initialized_for_path(Some(&params.output_path)) {
             return Ok(ToolResult {
                 content: vec![ContentBlock::text(msg)],
                 is_error: Some(true),
@@ -156,7 +158,6 @@ impl Tool for TasksTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
     use tempfile::tempdir;
     use tokio::fs;
 
@@ -181,13 +182,13 @@ mod tests {
         let specify_dir = dir.path().join(".specify");
         fs::create_dir(&specify_dir).await.unwrap();
 
-        // Change to temp directory FIRST
+        // Create dummy plan file using absolute path
+        let plan_file = dir.path().join("plan.md");
+        fs::write(&plan_file, "Test plan").await.unwrap();
+
+        // Change to temp directory for validation
         let original_dir = std::env::current_dir().unwrap();
         std::env::set_current_dir(dir.path()).unwrap();
-
-        let plan_file = Path::new("plan.md");
-        // Create dummy plan file in current directory
-        fs::write(plan_file, "Test plan").await.unwrap();
 
         let params = json!({
             "plan_file": "plan.md",

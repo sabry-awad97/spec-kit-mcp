@@ -10,7 +10,9 @@ use std::path::PathBuf;
 
 use crate::mcp::types::{ContentBlock, ToolDefinition, ToolResult};
 use crate::tools::Tool;
-use crate::utils::{validate_file_exists, validate_project_initialized, validate_safe_path};
+use crate::utils::{
+    validate_file_exists, validate_project_initialized_for_path, validate_safe_path,
+};
 use crate::validation::InputValidator;
 
 /// Parameters for the speckit_plan tool
@@ -83,8 +85,8 @@ impl Tool for PlanTool {
             "Creating technical plan"
         );
 
-        // Validate project is initialized
-        if let Err(msg) = validate_project_initialized() {
+        // Validate project is initialized (check in the output path's directory)
+        if let Err(msg) = validate_project_initialized_for_path(Some(&params.output_path)) {
             return Ok(ToolResult {
                 content: vec![ContentBlock::text(msg)],
                 is_error: Some(true),
@@ -154,7 +156,6 @@ impl Tool for PlanTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
     use tempfile::tempdir;
     use tokio::fs;
 
@@ -179,13 +180,13 @@ mod tests {
         let specify_dir = dir.path().join(".specify");
         fs::create_dir(&specify_dir).await.unwrap();
 
-        // Change to temp directory FIRST
+        // Create dummy spec file using absolute path
+        let spec_file = dir.path().join("spec.md");
+        fs::write(&spec_file, "Test specification").await.unwrap();
+
+        // Change to temp directory for validation
         let original_dir = std::env::current_dir().unwrap();
         std::env::set_current_dir(dir.path()).unwrap();
-
-        let spec_file = Path::new("spec.md");
-        // Create dummy spec file in current directory
-        fs::write(spec_file, "Test specification").await.unwrap();
 
         let params = json!({
             "spec_file": "spec.md",
@@ -193,12 +194,13 @@ mod tests {
             "output_path": "plan.md"
         });
 
-        let result = tool.execute(params).await.unwrap();
+        let result = tool.execute(params).await;
 
-        // Restore original directory
+        // Restore original directory before asserting
         std::env::set_current_dir(original_dir).unwrap();
 
         // Check result - tool should return instructions, not write file
+        let result = result.unwrap();
         assert!(result.is_error.is_none() || !result.is_error.unwrap());
     }
 }

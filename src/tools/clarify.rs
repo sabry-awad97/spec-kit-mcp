@@ -152,7 +152,6 @@ impl Tool for ClarifyTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
     use tempfile::tempdir;
     use tokio::fs;
 
@@ -173,15 +172,18 @@ mod tests {
 
         let dir = tempdir().unwrap();
 
-        // Change to temp directory FIRST
+        // Create spec with ambiguities using absolute path
+        let spec_file = dir.path().join("spec.md");
+        fs::write(
+            &spec_file,
+            "We might add OAuth. Performance should be good.",
+        )
+        .await
+        .unwrap();
+
+        // Change to temp directory for validation
         let original_dir = std::env::current_dir().unwrap();
         std::env::set_current_dir(dir.path()).unwrap();
-
-        let spec_file = Path::new("spec.md");
-        // Create spec with ambiguities in current directory
-        fs::write(spec_file, "We might add OAuth. Performance should be good.")
-            .await
-            .unwrap();
 
         let params = json!({
             "spec_file": "spec.md",

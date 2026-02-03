@@ -6,15 +6,41 @@ use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
 /// Validate that the project has been initialized with spec-kit
-pub fn validate_project_initialized() -> Result<(), String> {
-    if !Path::new(".specify").exists() {
-        Err("Error: .specify directory not found!\n\n\
-             Please run speckit_init first to initialize the project structure.\n\n\
-             Example: Use speckit_init with project_name=\"my-project\""
-            .to_string())
+/// If a path is provided, check for .specify in the parent directory of that path
+pub fn validate_project_initialized_for_path(path: Option<&Path>) -> Result<(), String> {
+    let check_dir = if let Some(p) = path {
+        // Extract the directory from the path
+        if let Some(parent) = p.parent() {
+            if parent.as_os_str().is_empty() {
+                Path::new(".")
+            } else {
+                parent
+            }
+        } else {
+            Path::new(".")
+        }
+    } else {
+        Path::new(".")
+    };
+
+    let specify_dir = check_dir.join(".specify");
+
+    if !specify_dir.exists() {
+        Err(format!(
+            "Error: .specify directory not found in '{}'!\n\n\
+             Please ensure you're working in an initialized spec-kit project.\n\n\
+             If the project is in a subdirectory, make sure your output_path includes that directory.\n\
+             Example: output_path=\"my-project/speckit.constitution\"",
+            check_dir.display()
+        ))
     } else {
         Ok(())
     }
+}
+
+/// Validate that the project has been initialized with spec-kit (checks current directory)
+pub fn validate_project_initialized() -> Result<(), String> {
+    validate_project_initialized_for_path(None)
 }
 
 /// Validate that a file path is safe (within project directory)
@@ -166,9 +192,19 @@ mod tests {
         let _guard = std::env::current_dir().unwrap();
         std::env::set_current_dir(dir.path()).unwrap();
 
-        let unsafe_path = Path::new("../../../etc/passwd");
-        let result = validate_safe_path(unsafe_path);
-        assert!(result.is_err());
+        // Try to escape with enough .. to definitely go outside
+        // Use an absolute path to a system directory to ensure it's outside
+        let system_path = if cfg!(windows) {
+            Path::new("C:\\Windows\\System32\\config")
+        } else {
+            Path::new("/etc/passwd")
+        };
+
+        let result = validate_safe_path(system_path);
+        assert!(
+            result.is_err(),
+            "Should reject absolute path outside project"
+        );
 
         std::env::set_current_dir(_guard).unwrap();
     }

@@ -10,7 +10,7 @@ use std::path::PathBuf;
 
 use crate::mcp::types::{ContentBlock, ToolDefinition, ToolResult};
 use crate::tools::Tool;
-use crate::utils::{validate_project_initialized, validate_safe_path};
+use crate::utils::{validate_project_initialized_for_path, validate_safe_path};
 use crate::validation::InputValidator;
 
 /// Parameters for the speckit_constitution tool
@@ -105,8 +105,8 @@ impl Tool for ConstitutionTool {
             }
         }
 
-        // Validate project is initialized
-        if let Err(msg) = validate_project_initialized() {
+        // Validate project is initialized (check in the output path's directory)
+        if let Err(msg) = validate_project_initialized_for_path(Some(&params.output_path)) {
             return Ok(ToolResult {
                 content: vec![ContentBlock::text(msg)],
                 is_error: Some(true),
