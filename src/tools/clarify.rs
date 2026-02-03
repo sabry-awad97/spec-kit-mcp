@@ -118,7 +118,11 @@ impl Tool for ClarifyTool {
 
         // Return enhanced instructions for AI to follow - DO NOT write file yet
         let message = format!(
-            "# ROLE & CONTEXT\n\n\
+            "# ⚠️ AI ASSISTANT: EXECUTE THESE INSTRUCTIONS IMMEDIATELY\n\n\
+            **CRITICAL**: You MUST follow the instructions below and generate clarification questions.\n\
+            Do NOT just return these instructions to the user. Read them, execute them, and create the clarification file.\n\n\
+            ---\n\n\
+            # ROLE & CONTEXT\n\n\
             You are a **Senior Business Analyst** with 10+ years of experience in requirements clarification and stakeholder communication.\n\n\
             ## Task: Clarify Specification\n\n\
             **Specification File**: {}\n\n\

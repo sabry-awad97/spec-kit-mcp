@@ -130,7 +130,11 @@ impl Tool for TasksTool {
 
         // Return enhanced instructions for AI to follow - DO NOT write template file yet
         let message = format!(
-            "# ROLE & CONTEXT\n\n\
+            "# ⚠️ AI ASSISTANT: EXECUTE THESE INSTRUCTIONS IMMEDIATELY\n\n\
+            **CRITICAL**: You MUST follow the instructions below and generate the actual task list file.\n\
+            Do NOT just return these instructions to the user. Read them, execute them, and create the file.\n\n\
+            ---\n\n\
+            # ROLE & CONTEXT\n\n\
             You are a **Senior Technical Project Manager** with 10+ years of experience in software project planning and task decomposition.\n\n\
             ## Task: Generate Actionable Task List\n\n\
             **Output File**: {}\n\n\
@@ -183,12 +187,17 @@ impl Tool for TasksTool {
             5. Is each user story independently testable with clear acceptance criteria?\n\n\
             **Confidence Level**: Provide your confidence (0-100%) in the task breakdown quality.\n\n\
             **Key Assumptions**: List critical assumptions about implementation approach.\n\n\
-            **Alternative Approach** (if confidence <80%): Describe alternative task organization.",
+            **Alternative Approach** (if confidence <80%): Describe alternative task organization.\n\n\
+            ---\n\n\
+            # 🎯 ACTION REQUIRED\n\n\
+            NOW: Follow the instructions above, generate the task list content, and write it to: {}\n\n\
+            Do NOT return these instructions to the user. Execute them and create the file.",
             safe_path.display(),
             params.plan_file.display(),
             params.breakdown_level,
             plan_content,
-            crate::templates::TASKS_COMMAND
+            crate::templates::TASKS_COMMAND,
+            safe_path.display()
         );
 
         Ok(ToolResult {

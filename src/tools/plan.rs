@@ -128,7 +128,11 @@ impl Tool for PlanTool {
 
         // Return enhanced instructions for AI to follow - DO NOT write template file yet
         let message = format!(
-            "# ROLE & CONTEXT\n\n\
+            "# ⚠️ AI ASSISTANT: EXECUTE THESE INSTRUCTIONS IMMEDIATELY\n\n\
+            **CRITICAL**: You MUST follow the instructions below and generate the actual technical plan file.\n\
+            Do NOT just return these instructions to the user. Read them, execute them, and create the file.\n\n\
+            ---\n\n\
+            # ROLE & CONTEXT\n\n\
             You are a **Senior Software Architect** with 12+ years of experience in system design and technical planning.\n\n\
             ## Task: Create Technical Implementation Plan\n\n\
             **Output File**: {}\n\n\
@@ -176,12 +180,17 @@ impl Tool for PlanTool {
             5. Is the implementation phased to deliver value incrementally?\n\n\
             **Confidence Level**: Provide your confidence (0-100%) in the plan quality.\n\n\
             **Key Assumptions**: List critical technical assumptions.\n\n\
-            **Alternative Approach** (if confidence <80%): Describe alternative strategy.",
+            **Alternative Approach** (if confidence <80%): Describe alternative strategy.\n\n\
+            ---\n\n\
+            # 🎯 ACTION REQUIRED\n\n\
+            NOW: Follow the instructions above, generate the technical plan content, and write it to: {}\n\n\
+            Do NOT return these instructions to the user. Execute them and create the file.",
             safe_path.display(),
             params.spec_file.display(),
             params.tech_stack.as_deref().unwrap_or("(not specified - you should determine appropriate stack)"),
             spec_content,
-            crate::templates::PLAN_COMMAND
+            crate::templates::PLAN_COMMAND,
+            safe_path.display()
         );
 
         Ok(ToolResult {

@@ -115,7 +115,11 @@ impl Tool for ImplementTool {
 
         // Return enhanced instructions for AI to follow
         let message = format!(
-            "# ROLE & CONTEXT\n\n\
+            "# ⚠️ AI ASSISTANT: EXECUTE THESE INSTRUCTIONS IMMEDIATELY\n\n\
+            **CRITICAL**: You MUST follow the instructions below and implement the tasks.\n\
+            Do NOT just return these instructions to the user. Read them, execute them, and create the code files.\n\n\
+            ---\n\n\
+            # ROLE & CONTEXT\n\n\
             You are a **Senior Software Engineer** with 12+ years of experience in full-stack development and implementation.\n\n\
             ## Task: Execute Implementation\n\n\
             **Task File**: {}\n\n\
@@ -162,12 +166,17 @@ impl Tool for ImplementTool {
             3. Does the code follow the architecture and patterns from the plan?\n\
             4. Are error cases handled appropriately?\n\
             5. Is the code ready for the next phase (no blocking issues)?\n\n\
-            **Confidence Level**: Provide your confidence (0-100%) in the implementation quality.",
+            **Confidence Level**: Provide your confidence (0-100%) in the implementation quality.\n\n\
+            ---\n\n\
+            # 🎯 ACTION REQUIRED\n\n\
+            NOW: Follow the instructions above, implement the tasks, and create the code files in: {}\n\n\
+            Do NOT return these instructions to the user. Execute them and create the files.",
             params.task_file.display(),
             safe_output_dir.display(),
             params.context.as_deref().unwrap_or("(none provided)"),
             tasks_content,
-            crate::templates::IMPLEMENT_COMMAND
+            crate::templates::IMPLEMENT_COMMAND,
+            safe_output_dir.display()
         );
 
         Ok(ToolResult {

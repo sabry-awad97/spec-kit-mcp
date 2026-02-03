@@ -131,7 +131,11 @@ impl Tool for ChecklistTool {
 
         // Return enhanced instructions for AI to follow - DO NOT write file yet
         let message = format!(
-            "# ROLE & CONTEXT\n\n\
+            "# ⚠️ AI ASSISTANT: EXECUTE THESE INSTRUCTIONS IMMEDIATELY\n\n\
+            **CRITICAL**: You MUST follow the instructions below and generate the validation checklist.\n\
+            Do NOT just return these instructions to the user. Read them, execute them, and create the checklist file.\n\n\
+            ---\n\n\
+            # ROLE & CONTEXT\n\n\
             You are a **Senior Requirements Quality Engineer** with 10+ years of experience in requirements validation and quality assurance.\n\n\
             ## Task: Generate Validation Checklist\n\n\
             **Specification File**: {}\n\n\

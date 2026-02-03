@@ -130,7 +130,11 @@ impl Tool for ConstitutionTool {
 
         // Return enhanced instructions for AI to follow - DO NOT write template file yet
         let message = format!(
-            "# ROLE & CONTEXT\n\n\
+            "# ⚠️ AI ASSISTANT: EXECUTE THESE INSTRUCTIONS IMMEDIATELY\n\n\
+            **CRITICAL**: You MUST follow the instructions below and generate the actual constitution file.\n\
+            Do NOT just return these instructions to the user. Read them, execute them, and create the file.\n\n\
+            ---\n\n\
+            # ROLE & CONTEXT\n\n\
             You are a **Senior Engineering Manager** with 15+ years of experience in establishing engineering standards and governance.\n\n\
             ## Task: Create Project Constitution\n\n\
             **Output File**: {}\n\n\
@@ -177,11 +181,16 @@ impl Tool for ConstitutionTool {
             4. Are there any contradictions between principles?\n\
             5. Can developers easily understand what's required vs. recommended?\n\n\
             **Confidence Level**: Provide your confidence (0-100%) in the constitution quality.\n\n\
-            **Key Assumptions**: List assumptions about project context.",
+            **Key Assumptions**: List assumptions about project context.\n\n\
+            ---\n\n\
+            # 🎯 ACTION REQUIRED\n\n\
+            NOW: Follow the instructions above, generate the constitution content, and write it to: {}\n\n\
+            Do NOT return these instructions to the user. Execute them and create the file.",
             safe_path.display(),
             params.principles,
             params.constraints.as_deref().unwrap_or("(none provided)"),
-            crate::templates::CONSTITUTION_COMMAND
+            crate::templates::CONSTITUTION_COMMAND,
+            safe_path.display()
         );
 
         Ok(ToolResult {

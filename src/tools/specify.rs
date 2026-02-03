@@ -145,7 +145,11 @@ impl Tool for SpecifyTool {
 
         // Return enhanced instructions for AI to follow - DO NOT write template file yet
         let message = format!(
-            "# ROLE & CONTEXT\n\n\
+            "# ⚠️ AI ASSISTANT: EXECUTE THESE INSTRUCTIONS IMMEDIATELY\n\n\
+            **CRITICAL**: You MUST follow the instructions below and generate the actual specification file.\n\
+            Do NOT just return these instructions to the user. Read them, execute them, and create the file.\n\n\
+            ---\n\n\
+            # ROLE & CONTEXT\n\n\
             You are a **Senior Requirements Engineer** with 10+ years of experience in software specification.\n\n\
             ## Task: Create Specification\n\n\
             **Output File**: {}\n\n\
@@ -193,11 +197,16 @@ impl Tool for SpecifyTool {
             5. Are there any remaining ambiguities that would block planning?\n\n\
             **Confidence Level**: Provide your confidence (0-100%) in the specification quality.\n\n\
             **Key Assumptions**: List critical assumptions made.\n\n\
-            **What Would Change This**: Factors that would require spec revision.",
+            **What Would Change This**: Factors that would require spec revision.\n\n\
+            ---\n\n\
+            # 🎯 ACTION REQUIRED\n\n\
+            NOW: Follow the instructions above, generate the specification content, and write it to: {}\n\n\
+            Do NOT return these instructions to the user. Execute them and create the file.",
             safe_path.display(),
             params.requirements,
             params.user_stories.as_deref().unwrap_or("(none provided)"),
-            crate::templates::SPECIFY_COMMAND
+            crate::templates::SPECIFY_COMMAND,
+            safe_path.display()
         );
 
         Ok(ToolResult {

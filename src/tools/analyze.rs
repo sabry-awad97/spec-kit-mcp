@@ -150,7 +150,11 @@ impl Tool for AnalyzeTool {
 
         // Return enhanced instructions for AI to follow - DO NOT write file yet
         let message = format!(
-            "# ROLE & CONTEXT\n\n\
+            "# ⚠️ AI ASSISTANT: EXECUTE THESE INSTRUCTIONS IMMEDIATELY\n\n\
+            **CRITICAL**: You MUST follow the instructions below and perform the consistency analysis.\n\
+            Do NOT just return these instructions to the user. Read them, execute them, and create the analysis report.\n\n\
+            ---\n\n\
+            # ROLE & CONTEXT\n\n\
             You are a **Senior Quality Assurance Architect** with 12+ years of experience in requirements validation and consistency analysis.\n\n\
             ## Task: Analyze Project Artifacts\n\n\
             **Project Path**: {}\n\n\
