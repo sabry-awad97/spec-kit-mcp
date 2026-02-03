@@ -10,7 +10,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::mcp::types::{ContentBlock, ToolDefinition, ToolResult};
-use crate::speckit::SpecKitCli;
 use crate::tools::Tool;
 
 /// Parameters for the speckit_init tool
@@ -41,12 +40,13 @@ fn default_project_path() -> PathBuf {
 }
 
 /// Tool for initializing spec-kit projects
+#[derive(Default)]
 pub struct InitTool {}
 
 impl InitTool {
     /// Create a new init tool
-    pub fn new(_cli: SpecKitCli) -> Self {
-        Self {}
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Initialize project with native Rust implementation (using embedded templates)
@@ -400,8 +400,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_init_tool_definition() {
-        let cli = SpecKitCli::new();
-        let tool = InitTool::new(cli);
+        let tool = InitTool::new();
         let def = tool.definition();
 
         assert_eq!(def.name, "speckit_init");

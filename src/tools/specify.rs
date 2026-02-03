@@ -9,9 +9,9 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 
 use crate::mcp::types::{ContentBlock, ToolDefinition, ToolResult};
-use crate::speckit::SpecKitCli;
 use crate::tools::Tool;
 use crate::utils::{validate_project_initialized, validate_safe_path};
+use crate::validation::InputValidator;
 
 /// Parameters for the speckit_specify tool
 #[derive(Debug, Deserialize, Serialize)]
@@ -42,14 +42,13 @@ fn default_format() -> String {
 
 /// Tool for creating specifications
 pub struct SpecifyTool {
-    #[allow(dead_code)]
-    cli: SpecKitCli,
+    validator: InputValidator,
 }
 
 impl SpecifyTool {
     /// Create a new specify tool
-    pub fn new(cli: SpecKitCli) -> Self {
-        Self { cli }
+    pub fn new(validator: InputValidator) -> Self {
+        Self { validator }
     }
 }
 
@@ -96,6 +95,30 @@ impl Tool for SpecifyTool {
             format = %params.format,
             "Creating specification"
         );
+
+        // Validate requirements
+        if let Err(e) = self.validator.validate_requirements(&params.requirements) {
+            return Ok(ToolResult {
+                content: vec![ContentBlock::text(format!(
+                    "Invalid requirements: {}\n\nSuggestion: {}",
+                    e, "Ensure requirements are not empty and within size limits"
+                ))],
+                is_error: Some(true),
+            });
+        }
+
+        // Validate user stories if provided
+        if let Some(ref stories) = params.user_stories {
+            if let Err(e) = self.validator.validate_user_stories(stories) {
+                return Ok(ToolResult {
+                    content: vec![ContentBlock::text(format!(
+                        "Invalid user stories: {}\n\nSuggestion: {}",
+                        e, "Ensure user stories are within size limits"
+                    ))],
+                    is_error: Some(true),
+                });
+            }
+        }
 
         // Validate project is initialized
         if let Err(msg) = validate_project_initialized() {
@@ -152,8 +175,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_specify_tool_definition() {
-        let cli = SpecKitCli::new();
-        let tool = SpecifyTool::new(cli);
+        let validator = InputValidator::new();
+        let tool = SpecifyTool::new(validator);
         let def = tool.definition();
 
         assert_eq!(def.name, "speckit_specify");
@@ -162,8 +185,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_specify_tool_execute() {
-        let cli = SpecKitCli::new_test_mode();
-        let tool = SpecifyTool::new(cli);
+        let validator = InputValidator::new();
+        let tool = SpecifyTool::new(validator);
 
         let dir = tempdir().unwrap();
 

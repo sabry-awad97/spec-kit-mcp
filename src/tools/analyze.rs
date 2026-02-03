@@ -9,9 +9,9 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 
 use crate::mcp::types::{ContentBlock, ToolDefinition, ToolResult};
-use crate::speckit::SpecKitCli;
 use crate::tools::Tool;
 use crate::utils::validate_safe_path;
+use crate::validation::InputValidator;
 
 /// Parameters for the speckit_analyze tool
 #[derive(Debug, Deserialize, Serialize)]
@@ -42,14 +42,14 @@ fn default_analyze_path() -> PathBuf {
 
 /// Tool for analyzing spec-kit artifacts
 pub struct AnalyzeTool {
-    #[allow(dead_code)]
-    cli: SpecKitCli,
+    #[allow(dead_code)] // Will be used for future validation
+    validator: InputValidator,
 }
 
 impl AnalyzeTool {
     /// Create a new analyze tool
-    pub fn new(cli: SpecKitCli) -> Self {
-        Self { cli }
+    pub fn new(validator: InputValidator) -> Self {
+        Self { validator }
     }
 }
 
@@ -193,8 +193,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_analyze_tool_definition() {
-        let cli = SpecKitCli::new();
-        let tool = AnalyzeTool::new(cli);
+        let validator = InputValidator::new();
+        let tool = AnalyzeTool::new(validator);
         let def = tool.definition();
 
         assert_eq!(def.name, "speckit_analyze");
@@ -203,8 +203,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_analyze_tool_execute() {
-        let cli = SpecKitCli::new_test_mode();
-        let tool = AnalyzeTool::new(cli);
+        let validator = InputValidator::new();
+        let tool = AnalyzeTool::new(validator);
 
         let dir = tempdir().unwrap();
 

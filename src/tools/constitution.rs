@@ -9,9 +9,9 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 
 use crate::mcp::types::{ContentBlock, ToolDefinition, ToolResult};
-use crate::speckit::SpecKitCli;
 use crate::tools::Tool;
 use crate::utils::{validate_project_initialized, validate_safe_path};
+use crate::validation::InputValidator;
 
 /// Parameters for the speckit_constitution tool
 #[derive(Debug, Deserialize, Serialize)]
@@ -34,14 +34,13 @@ fn default_constitution_path() -> PathBuf {
 
 /// Tool for creating project constitutions
 pub struct ConstitutionTool {
-    #[allow(dead_code)]
-    cli: SpecKitCli,
+    validator: InputValidator,
 }
 
 impl ConstitutionTool {
     /// Create a new constitution tool
-    pub fn new(cli: SpecKitCli) -> Self {
-        Self { cli }
+    pub fn new(validator: InputValidator) -> Self {
+        Self { validator }
     }
 }
 
@@ -81,6 +80,30 @@ impl Tool for ConstitutionTool {
             output_path = %params.output_path.display(),
             "Creating constitution"
         );
+
+        // Validate principles
+        if let Err(e) = self.validator.validate_principles(&params.principles) {
+            return Ok(ToolResult {
+                content: vec![ContentBlock::text(format!(
+                    "Invalid principles: {}\n\nSuggestion: {}",
+                    e, "Ensure principles are not empty and within size limits"
+                ))],
+                is_error: Some(true),
+            });
+        }
+
+        // Validate constraints if provided
+        if let Some(ref constraints) = params.constraints {
+            if let Err(e) = self.validator.validate_user_stories(constraints) {
+                return Ok(ToolResult {
+                    content: vec![ContentBlock::text(format!(
+                        "Invalid constraints: {}\n\nSuggestion: {}",
+                        e, "Ensure constraints are within size limits"
+                    ))],
+                    is_error: Some(true),
+                });
+            }
+        }
 
         // Validate project is initialized
         if let Err(msg) = validate_project_initialized() {
@@ -137,8 +160,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_constitution_tool_definition() {
-        let cli = SpecKitCli::new();
-        let tool = ConstitutionTool::new(cli);
+        let validator = InputValidator::new();
+        let tool = ConstitutionTool::new(validator);
         let def = tool.definition();
 
         assert_eq!(def.name, "speckit_constitution");
@@ -147,8 +170,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_constitution_tool_execute() {
-        let cli = SpecKitCli::new_test_mode();
-        let tool = ConstitutionTool::new(cli);
+        let validator = InputValidator::new();
+        let tool = ConstitutionTool::new(validator);
 
         let dir = tempdir().unwrap();
 

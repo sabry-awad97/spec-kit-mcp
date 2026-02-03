@@ -1,0 +1,51 @@
+# Spec-Kit MCP Server Configuration
+# This file contains default configuration values that can be overridden
+# by environment variables with the SPECKIT_ prefix.
+
+[server]
+# Server host (for future HTTP support)
+host = "127.0.0.1"
+# Server port (for future HTTP support)
+port = 3000
+# Enable stdio transport (default: true)
+stdio_enabled = true
+
+[tools]
+# Maximum retries for failed operations
+max_retries = 3
+
+[limits]
+# Maximum file size in bytes (10MB)
+max_file_size = 10485760
+# Maximum content length in bytes (1MB)
+max_content_length = 1048576
+# Maximum concurrent operations
+max_concurrent_operations = 10
+# Maximum path length
+max_path_length = 4096
+
+[logging]
+# Log level: trace, debug, info, warn, error
+level = "info"
+# Log format: text, json
+format = "text"
+# Log output: stdout, stderr, file
+output = "stderr"
+# Log file path (if output is "file")
+# file_path = "/var/log/speckit-mcp.log"
+
+[security]
+# Enable authentication (for future HTTP support)
+enable_auth = false
+# API keys (for future HTTP support)
+api_keys = []
+# Enable rate limiting
+enable_rate_limiting = false
+# Rate limit: max requests per window
+rate_limit_requests = 100
+# Rate limit window in seconds
+rate_limit_window_seconds = 60
+# Enable audit logging
+enable_audit_log = false
+# Audit log file path
+# audit_log_path = "/var/log/speckit-audit.log"

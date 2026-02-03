@@ -124,13 +124,12 @@ impl McpServer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::speckit::SpecKitCli;
     use crate::tools::create_registry;
 
     #[test]
     fn test_server_creation() {
-        let cli = SpecKitCli::new();
-        let registry = create_registry(cli);
+        let config = crate::config::SpecKitConfig::default();
+        let registry = create_registry(config);
         let server = McpServer::new(registry);
 
         // Just ensure server can be created

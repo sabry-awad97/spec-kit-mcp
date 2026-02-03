@@ -9,9 +9,9 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 
 use crate::mcp::types::{ContentBlock, ToolDefinition, ToolResult};
-use crate::speckit::SpecKitCli;
 use crate::tools::Tool;
 use crate::utils::{validate_file_exists, validate_project_initialized, validate_safe_path};
+use crate::validation::InputValidator;
 
 /// Parameters for the speckit_tasks tool
 #[derive(Debug, Deserialize, Serialize)]
@@ -38,14 +38,14 @@ fn default_tasks_path() -> PathBuf {
 
 /// Tool for generating task lists
 pub struct TasksTool {
-    #[allow(dead_code)]
-    cli: SpecKitCli,
+    #[allow(dead_code)] // Will be used for future validation
+    validator: InputValidator,
 }
 
 impl TasksTool {
     /// Create a new tasks tool
-    pub fn new(cli: SpecKitCli) -> Self {
-        Self { cli }
+    pub fn new(validator: InputValidator) -> Self {
+        Self { validator }
     }
 }
 
@@ -162,8 +162,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_tasks_tool_definition() {
-        let cli = SpecKitCli::new();
-        let tool = TasksTool::new(cli);
+        let validator = InputValidator::new();
+        let tool = TasksTool::new(validator);
         let def = tool.definition();
 
         assert_eq!(def.name, "speckit_tasks");
@@ -172,8 +172,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_tasks_tool_execute() {
-        let cli = SpecKitCli::new_test_mode();
-        let tool = TasksTool::new(cli);
+        let validator = InputValidator::new();
+        let tool = TasksTool::new(validator);
 
         let dir = tempdir().unwrap();
 

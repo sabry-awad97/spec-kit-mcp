@@ -1,5 +1,7 @@
 //! Configuration Management
 //!
-//! Placeholder for future configuration features.
+//! Centralized configuration for the spec-kit MCP server.
 
-// Configuration will be added in future versions
+pub mod settings;
+
+pub use settings::*;

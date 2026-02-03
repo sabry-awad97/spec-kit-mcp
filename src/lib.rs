@@ -60,15 +60,15 @@
 //! # Example Usage
 //!
 //! ```rust,no_run
-//! use spec_kit_mcp::{McpServer, create_registry, SpecKitCli};
+//! use spec_kit_mcp::{McpServer, create_registry, SpecKitConfig};
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
-//!     // Create CLI interface
-//!     let cli = SpecKitCli::new();
+//!     // Load configuration
+//!     let config = SpecKitConfig::load()?;
 //!
-//!     // Create tool registry
-//!     let registry = create_registry(cli);
+//!     // Create tool registry with configuration
+//!     let registry = create_registry(config);
 //!
 //!     // Create and run server
 //!     let mut server = McpServer::new(registry);
@@ -85,8 +85,11 @@ pub mod speckit;
 pub mod templates;
 pub mod tools;
 pub mod utils;
+pub mod validation;
 
 // Re-export main types
+pub use config::SpecKitConfig;
 pub use mcp::{McpServer, ProtocolHandler, StdioTransport};
-pub use speckit::{SpecKitCli, SpecKitError};
+pub use speckit::SpecKitError;
 pub use tools::{create_registry, Tool, ToolRegistry};
+pub use validation::{InputValidator, ValidationConfig};

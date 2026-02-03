@@ -9,9 +9,9 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 
 use crate::mcp::types::{ContentBlock, ToolDefinition, ToolResult};
-use crate::speckit::SpecKitCli;
 use crate::tools::Tool;
 use crate::utils::{validate_file_exists, validate_safe_path};
+use crate::validation::InputValidator;
 
 /// Parameters for the speckit_clarify tool
 #[derive(Debug, Deserialize, Serialize)]
@@ -34,14 +34,14 @@ fn default_clarify_path() -> PathBuf {
 
 /// Tool for clarifying specifications
 pub struct ClarifyTool {
-    #[allow(dead_code)]
-    cli: SpecKitCli,
+    #[allow(dead_code)] // Will be used for future validation
+    validator: InputValidator,
 }
 
 impl ClarifyTool {
     /// Create a new clarify tool
-    pub fn new(cli: SpecKitCli) -> Self {
-        Self { cli }
+    pub fn new(validator: InputValidator) -> Self {
+        Self { validator }
     }
 }
 
@@ -158,8 +158,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_clarify_tool_definition() {
-        let cli = SpecKitCli::new();
-        let tool = ClarifyTool::new(cli);
+        let validator = InputValidator::new();
+        let tool = ClarifyTool::new(validator);
         let def = tool.definition();
 
         assert_eq!(def.name, "speckit_clarify");
@@ -168,8 +168,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_clarify_tool_execute() {
-        let cli = SpecKitCli::new_test_mode();
-        let tool = ClarifyTool::new(cli);
+        let validator = InputValidator::new();
+        let tool = ClarifyTool::new(validator);
 
         let dir = tempdir().unwrap();
 

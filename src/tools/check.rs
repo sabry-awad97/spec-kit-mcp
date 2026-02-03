@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::mcp::types::{ContentBlock, ToolDefinition, ToolResult};
-use crate::speckit::SpecKitCli;
 use crate::tools::Tool;
 
 /// Parameters for the speckit_check tool
@@ -42,12 +41,13 @@ impl Default for CheckParams {
 }
 
 /// Tool for checking required tool installations
+#[derive(Default)]
 pub struct CheckTool {}
 
 impl CheckTool {
     /// Create a new check tool
-    pub fn new(_cli: SpecKitCli) -> Self {
-        Self {}
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Check if a command is available
@@ -162,8 +162,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_check_tool_definition() {
-        let cli = SpecKitCli::new();
-        let tool = CheckTool::new(cli);
+        let tool = CheckTool::new();
         let def = tool.definition();
 
         assert_eq!(def.name, "speckit_check");
@@ -172,8 +171,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_check_tool_execute() {
-        let cli = SpecKitCli::new_test_mode();
-        let tool = CheckTool::new(cli);
+        let tool = CheckTool::new();
 
         // Test with default params
         let result = tool.execute(json!({})).await.unwrap();

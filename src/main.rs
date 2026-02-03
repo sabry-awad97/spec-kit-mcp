@@ -4,7 +4,7 @@
 
 use anyhow::Result;
 use clap::Parser;
-use spec_kit_mcp::{create_registry, McpServer, SpecKitCli};
+use spec_kit_mcp::{create_registry, McpServer, SpecKitConfig};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 /// Spec-Kit MCP Server
@@ -14,16 +14,20 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 #[command(version)]
 struct Args {
     /// Log level (trace, debug, info, warn, error)
-    #[arg(short, long, default_value = "info")]
-    log_level: String,
+    #[arg(short, long)]
+    log_level: Option<String>,
 
-    /// Path to spec-kit CLI (defaults to 'specify' in PATH)
+    /// Path to spec-kit CLI (deprecated - no longer used)
     #[arg(long)]
     cli_path: Option<String>,
 
-    /// Timeout for spec-kit commands in seconds
-    #[arg(long, default_value = "300")]
-    timeout: u64,
+    /// Timeout for spec-kit commands in seconds (deprecated - no longer used)
+    #[arg(long)]
+    timeout: Option<u64>,
+
+    /// Path to configuration file
+    #[arg(short, long)]
+    config: Option<String>,
 }
 
 #[tokio::main]
@@ -31,38 +35,41 @@ async fn main() -> Result<()> {
     // Parse arguments
     let args = Args::parse();
 
+    // Load configuration
+    let mut config = if let Some(config_path) = &args.config {
+        tracing::info!(path = %config_path, "Loading configuration from file");
+        SpecKitConfig::from_file(std::path::Path::new(config_path))?
+    } else {
+        // Load from default locations or environment
+        SpecKitConfig::load()?
+    };
+
+    // Override config with CLI arguments
+    if let Some(log_level) = args.log_level {
+        config.logging.level = log_level;
+    }
+
+    // Note: timeout and cli_path arguments are deprecated and ignored
+
+    // Validate configuration
+    config.validate()?;
+
     // Initialize logging
-    init_logging(&args.log_level)?;
+    init_logging(&config)?;
 
     tracing::info!(
         version = env!("CARGO_PKG_VERSION"),
         "Starting spec-kit-mcp server"
     );
 
-    // Create spec-kit CLI interface
-    let mut cli = SpecKitCli::new().with_timeout(args.timeout);
+    tracing::debug!(
+        max_file_size = config.limits.max_file_size,
+        max_content_length = config.limits.max_content_length,
+        "Configuration loaded"
+    );
 
-    if let Some(cli_path) = args.cli_path {
-        cli = cli.with_cli_path(cli_path);
-    }
-
-    // Check if spec-kit is installed
-    if !cli.is_installed().await {
-        eprintln!("Error: spec-kit CLI not found!");
-        eprintln!("Please install uv/uvx with:");
-        eprintln!("  curl -LsSf https://astral.sh/uv/install.sh | sh");
-        eprintln!("Or via pip:");
-        eprintln!("  pip install uv");
-        eprintln!();
-        eprintln!("The spec-kit CLI will be run automatically via:");
-        eprintln!("  uvx --from git+https://github.com/github/spec-kit.git specify");
-        std::process::exit(1);
-    }
-
-    tracing::info!("Spec-kit CLI found and validated");
-
-    // Create tool registry
-    let registry = create_registry(cli);
+    // Create tool registry with configuration
+    let registry = create_registry(config.clone());
     tracing::info!(tool_count = registry.len(), "Tool registry initialized");
 
     // Create and run server
@@ -76,15 +83,29 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-/// Initialize logging
-fn init_logging(level: &str) -> Result<()> {
+/// Initialize logging based on configuration
+fn init_logging(config: &SpecKitConfig) -> Result<()> {
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(level));
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&config.logging.level));
 
-    tracing_subscriber::registry()
-        .with(env_filter)
-        .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
-        .init();
+    match config.logging.format.as_str() {
+        "json" => {
+            tracing_subscriber::registry()
+                .with(env_filter)
+                .with(
+                    tracing_subscriber::fmt::layer()
+                        .json()
+                        .with_writer(std::io::stderr),
+                )
+                .init();
+        }
+        _ => {
+            tracing_subscriber::registry()
+                .with(env_filter)
+                .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
+                .init();
+        }
+    }
 
     Ok(())
 }

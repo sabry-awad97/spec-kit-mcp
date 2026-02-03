@@ -58,6 +58,9 @@ chrono = "0.4"
 # Directory walking
 walkdir = "2.5"
 
+# Regular expressions
+regex = "1.11"
+
 [dev-dependencies]
 mockall = "0.14.0"
 tempfile = "3.24.0"

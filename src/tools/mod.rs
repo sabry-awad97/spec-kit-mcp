@@ -9,7 +9,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::mcp::types::{ToolDefinition, ToolResult};
-use crate::speckit::SpecKitCli;
 
 pub mod analyze;
 pub mod check;
@@ -100,20 +99,31 @@ impl Default for ToolRegistry {
 }
 
 /// Create and populate the default tool registry
-pub fn create_registry(cli: SpecKitCli) -> ToolRegistry {
+pub fn create_registry(config: crate::config::SpecKitConfig) -> ToolRegistry {
     let mut registry = ToolRegistry::new();
 
-    // Register all tools
-    registry.register(Arc::new(InitTool::new(cli.clone())));
-    registry.register(Arc::new(CheckTool::new(cli.clone())));
-    registry.register(Arc::new(ConstitutionTool::new(cli.clone())));
-    registry.register(Arc::new(SpecifyTool::new(cli.clone())));
-    registry.register(Arc::new(PlanTool::new(cli.clone())));
-    registry.register(Arc::new(TasksTool::new(cli.clone())));
-    registry.register(Arc::new(ImplementTool::new(cli.clone())));
-    registry.register(Arc::new(ClarifyTool::new(cli.clone())));
-    registry.register(Arc::new(AnalyzeTool::new(cli.clone())));
-    registry.register(Arc::new(ChecklistTool::new(cli)));
+    // Create validator from config
+    let validator =
+        crate::validation::InputValidator::with_config(crate::validation::ValidationConfig {
+            max_file_size: config.limits.max_file_size,
+            max_content_length: config.limits.max_content_length,
+            max_path_length: config.limits.max_path_length,
+            allow_unicode: true,
+        });
+
+    // Register all tools (none require CLI anymore)
+    registry.register(Arc::new(InitTool::new()));
+    registry.register(Arc::new(CheckTool::new()));
+
+    // Register tools that only need validator
+    registry.register(Arc::new(ConstitutionTool::new(validator.clone())));
+    registry.register(Arc::new(SpecifyTool::new(validator.clone())));
+    registry.register(Arc::new(PlanTool::new(validator.clone())));
+    registry.register(Arc::new(TasksTool::new(validator.clone())));
+    registry.register(Arc::new(ImplementTool::new(validator.clone())));
+    registry.register(Arc::new(ClarifyTool::new(validator.clone())));
+    registry.register(Arc::new(AnalyzeTool::new(validator.clone())));
+    registry.register(Arc::new(ChecklistTool::new(validator)));
 
     tracing::info!(tool_count = registry.len(), "Tool registry created");
 
@@ -133,8 +143,8 @@ mod tests {
 
     #[test]
     fn test_registry_with_tools() {
-        let cli = SpecKitCli::new();
-        let registry = create_registry(cli);
+        let config = crate::config::SpecKitConfig::default();
+        let registry = create_registry(config);
 
         assert!(!registry.is_empty());
         assert!(registry.has_tool("speckit_init"));
@@ -144,8 +154,8 @@ mod tests {
 
     #[test]
     fn test_list_tools() {
-        let cli = SpecKitCli::new();
-        let registry = create_registry(cli);
+        let config = crate::config::SpecKitConfig::default();
+        let registry = create_registry(config);
 
         let tools = registry.list_tools();
         assert!(!tools.is_empty());
