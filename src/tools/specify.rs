@@ -143,18 +143,57 @@ impl Tool for SpecifyTool {
             }
         };
 
-        // Return instructions for AI to follow - DO NOT write template file yet
+        // Return enhanced instructions for AI to follow - DO NOT write template file yet
         let message = format!(
-            "## Task: Create Specification\n\n\
+            "# ROLE & CONTEXT\n\n\
+            You are a **Senior Requirements Engineer** with 10+ years of experience in software specification.\n\n\
+            ## Task: Create Specification\n\n\
             **Output File**: {}\n\n\
             **User Requirements**:\n```\n{}\n```\n\n\
             **User Stories**:\n```\n{}\n```\n\n\
             ---\n\n\
-            ## Instructions\n\n\
+            # STRUCTURED THINKING PROTOCOL\n\n\
+            Before generating the specification, complete these steps:\n\n\
+            ## [UNDERSTAND]\n\
+            - Restate the feature request in your own words\n\
+            - Identify the core user problem being solved\n\
+            - Extract key actors, actions, and expected outcomes\n\n\
+            ## [ANALYZE]\n\
+            - Break down into functional components\n\
+            - Identify implicit assumptions that need validation\n\
+            - Recognize potential edge cases and failure scenarios\n\n\
+            ## [STRATEGIZE]\n\
+            - Determine reasonable defaults for underspecified aspects\n\
+            - Prioritize clarification questions by impact\n\
+            - Plan specification structure based on complexity\n\n\
+            ## [EXECUTE]\n\
+            - Generate specification following validated strategy\n\
+            - Apply quality validation checkpoints\n\
+            - Provide confidence assessment\n\n\
+            ---\n\n\
+            # DETAILED INSTRUCTIONS\n\n\
             You must now follow the detailed workflow below to generate a complete specification.\n\
             After generating the content, write it to the output file path above.\n\n\
-            **IMPORTANT**: Do NOT write placeholder content. Generate fully populated content following the instructions.\n\n\
-            {}",
+            **CRITICAL REQUIREMENTS**:\n\
+            - Do NOT write placeholder content\n\
+            - Generate fully populated content following the instructions\n\
+            - Focus on WHAT users need, not HOW to implement\n\
+            - Make requirements testable and measurable\n\
+            - Document assumptions clearly\n\n\
+            ---\n\n\
+            # WORKFLOW\n\n\
+            {}\n\n\
+            ---\n\n\
+            # CHAIN-OF-VERIFICATION\n\n\
+            After generating the specification, verify:\n\n\
+            1. Are all user-facing features described without mentioning specific technologies?\n\
+            2. Can each functional requirement be tested without knowing the implementation?\n\
+            3. Are success criteria measurable with specific metrics?\n\
+            4. Have I documented all assumptions made?\n\
+            5. Are there any remaining ambiguities that would block planning?\n\n\
+            **Confidence Level**: Provide your confidence (0-100%) in the specification quality.\n\n\
+            **Key Assumptions**: List critical assumptions made.\n\n\
+            **What Would Change This**: Factors that would require spec revision.",
             safe_path.display(),
             params.requirements,
             params.user_stories.as_deref().unwrap_or("(none provided)"),

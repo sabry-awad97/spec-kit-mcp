@@ -129,24 +129,57 @@ impl Tool for ChecklistTool {
                 )
             })?;
 
-        // Return instructions for AI to follow - DO NOT write file yet
+        // Return enhanced instructions for AI to follow - DO NOT write file yet
         let message = format!(
-            "## Task: Generate Validation Checklist\n\n\
+            "# ROLE & CONTEXT\n\n\
+            You are a **Senior Requirements Quality Engineer** with 10+ years of experience in requirements validation and quality assurance.\n\n\
+            ## Task: Generate Validation Checklist\n\n\
             **Specification File**: {}\n\n\
             **Output File**: {}\n\n\
             **Include Implementation**: {}\n\
             **Include Testing**: {}\n\n\
             **Specification Content**:\n```\n{}\n```\n\n\
             ---\n\n\
-            ## Instructions\n\n\
+            # STRUCTURED THINKING PROTOCOL\n\n\
+            Before generating checklist, complete these steps:\n\n\
+            ## [UNDERSTAND]\n\
+            - Review user's request and extract checklist domain/theme\n\
+            - Identify target audience (author, reviewer, QA, release gate)\n\
+            - Note specific focus areas or must-have items\n\n\
+            ## [ANALYZE]\n\
+            - Load relevant portions of spec/plan/tasks\n\
+            - Identify requirement quality dimensions to validate\n\
+            - Recognize gaps, ambiguities, and inconsistencies\n\n\
+            ## [STRATEGIZE]\n\
+            - Determine checklist categories based on domain\n\
+            - Prioritize items by risk and impact\n\
+            - Plan traceability approach (spec section references)\n\n\
+            ## [EXECUTE]\n\
+            - Generate checklist items testing requirements quality\n\
+            - Ensure each item has clear quality dimension\n\
+            - Include traceability references (≥80% of items)\n\
+            - Validate against prohibited patterns\n\n\
+            ---\n\n\
+            # DETAILED INSTRUCTIONS\n\n\
             You must now follow the detailed workflow below to generate a validation checklist.\n\
             After generating the content, write it to the output file path above.\n\n\
-            **IMPORTANT**: \n\
-            - Extract all requirements from the specification\n\
-            - Create specific, testable checklist items\n\
-            - Organize by category (requirements, implementation, testing, quality)\n\
-            - Do NOT write placeholder content\n\n\
-            {}",
+            **CRITICAL REQUIREMENTS**:\n\
+            - Checklist items test REQUIREMENTS QUALITY, not implementation\n\
+            - Each item must be a question about what's written in the spec\n\
+            - Include quality dimension in brackets [Completeness/Clarity/etc.]\n\
+            - ≥80% of items must have traceability references\n\n\
+            ---\n\n\
+            # WORKFLOW\n\n\
+            {}\n\n\
+            ---\n\n\
+            # CHAIN-OF-VERIFICATION\n\n\
+            After generating checklist, verify:\n\n\
+            1. Does every item test requirements quality, not implementation behavior?\n\
+            2. Do ≥80% of items include traceability references?\n\
+            3. Are items organized by clear quality dimensions?\n\
+            4. Have I avoided prohibited patterns (Verify, Test, Confirm + behavior)?\n\
+            5. Is the checklist focused on high-impact quality issues?\n\n\
+            **Confidence Level**: Provide your confidence (0-100%) in the checklist quality.",
             params.spec_file.display(),
             safe_path.display(),
             params.include_implementation,

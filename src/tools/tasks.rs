@@ -128,19 +128,62 @@ impl Tool for TasksTool {
             .await
             .with_context(|| format!("Failed to read plan file: {}", params.plan_file.display()))?;
 
-        // Return instructions for AI to follow - DO NOT write template file yet
+        // Return enhanced instructions for AI to follow - DO NOT write template file yet
         let message = format!(
-            "## Task: Generate Actionable Task List\n\n\
+            "# ROLE & CONTEXT\n\n\
+            You are a **Senior Technical Project Manager** with 10+ years of experience in software project planning and task decomposition.\n\n\
+            ## Task: Generate Actionable Task List\n\n\
             **Output File**: {}\n\n\
             **Plan File**: {}\n\n\
             **Breakdown Level**: {}\n\n\
             **Plan Content**:\n```\n{}\n```\n\n\
             ---\n\n\
-            ## Instructions\n\n\
+            # STRUCTURED THINKING PROTOCOL\n\n\
+            Before generating tasks, complete these steps:\n\n\
+            ## [UNDERSTAND]\n\
+            - Review feature scope from spec.md\n\
+            - Identify technical approach from plan.md\n\
+            - Extract user stories with priorities\n\
+            - Note available design artifacts\n\n\
+            ## [ANALYZE]\n\
+            - Break down into implementation layers (data, logic, API, UI)\n\
+            - Identify blocking dependencies (what must be done first)\n\
+            - Recognize parallelization opportunities\n\
+            - Assess testing strategy\n\n\
+            ## [STRATEGIZE]\n\
+            - Organize tasks by user story for independent delivery\n\
+            - Plan MVP scope (typically User Story 1 only)\n\
+            - Determine task granularity (specific enough for LLM execution)\n\
+            - Create dependency graph\n\n\
+            ## [EXECUTE]\n\
+            - Generate tasks following strict checklist format\n\
+            - Validate each task has clear file paths\n\
+            - Ensure each user story is independently testable\n\
+            - Provide parallel execution examples\n\n\
+            ---\n\n\
+            # DETAILED INSTRUCTIONS\n\n\
             You must now follow the detailed workflow below to generate a complete task list.\n\
             After generating the content, write it to the output file path above.\n\n\
-            **IMPORTANT**: Do NOT write placeholder content. Generate fully populated content following the instructions.\n\n\
-            {}",
+            **CRITICAL REQUIREMENTS**:\n\
+            - ALL tasks MUST follow checklist format: `- [ ] [TaskID] [P?] [Story?] Description with file path`\n\
+            - Tasks MUST be organized by user story\n\
+            - Each task MUST have exact file path\n\
+            - Mark parallel tasks with [P]\n\
+            - Each story should be independently testable\n\n\
+            ---\n\n\
+            # WORKFLOW\n\n\
+            {}\n\n\
+            ---\n\n\
+            # CHAIN-OF-VERIFICATION\n\n\
+            After generating tasks, verify:\n\n\
+            1. Does every user story have all necessary tasks (data, logic, API, UI)?\n\
+            2. Are task dependencies clearly marked and does sequence make sense?\n\
+            3. Can each task be completed independently without additional context?\n\
+            4. Are file paths specific enough that an LLM knows exactly what to create?\n\
+            5. Is each user story independently testable with clear acceptance criteria?\n\n\
+            **Confidence Level**: Provide your confidence (0-100%) in the task breakdown quality.\n\n\
+            **Key Assumptions**: List critical assumptions about implementation approach.\n\n\
+            **Alternative Approach** (if confidence <80%): Describe alternative task organization.",
             safe_path.display(),
             params.plan_file.display(),
             params.breakdown_level,

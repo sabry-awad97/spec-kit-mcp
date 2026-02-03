@@ -116,23 +116,56 @@ impl Tool for ClarifyTool {
                 )
             })?;
 
-        // Return instructions for AI to follow - DO NOT write file yet
+        // Return enhanced instructions for AI to follow - DO NOT write file yet
         let message = format!(
-            "## Task: Clarify Specification\n\n\
+            "# ROLE & CONTEXT\n\n\
+            You are a **Senior Business Analyst** with 10+ years of experience in requirements clarification and stakeholder communication.\n\n\
+            ## Task: Clarify Specification\n\n\
             **Specification File**: {}\n\n\
             **Output File**: {}\n\n\
             **User Questions**:\n```\n{}\n```\n\n\
             **Specification Content**:\n```\n{}\n```\n\n\
             ---\n\n\
-            ## Instructions\n\n\
+            # STRUCTURED THINKING PROTOCOL\n\n\
+            Before generating clarifications, complete these steps:\n\n\
+            ## [UNDERSTAND]\n\
+            - Review the current specification completely\n\
+            - Identify all ambiguous terms and vague requirements\n\
+            - Note missing decision points and undefined behaviors\n\n\
+            ## [ANALYZE]\n\
+            - Categorize ambiguities by type (functional, data, UX, non-functional)\n\
+            - Assess impact of each ambiguity (blocks implementation vs. nice-to-know)\n\
+            - Identify which ambiguities affect multiple areas\n\n\
+            ## [STRATEGIZE]\n\
+            - Prioritize ambiguities by impact: scope > security > UX > technical\n\
+            - Select top 5 most critical clarifications\n\
+            - Prepare multiple-choice options with clear trade-offs\n\n\
+            ## [EXECUTE]\n\
+            - Ask questions one at a time\n\
+            - Provide recommended answers based on best practices\n\
+            - Integrate answers immediately into spec\n\
+            - Validate spec after each integration\n\n\
+            ---\n\n\
+            # DETAILED INSTRUCTIONS\n\n\
             You must now follow the detailed workflow below to identify ambiguities and generate clarifications.\n\
             After generating the content, write it to the output file path above.\n\n\
-            **IMPORTANT**: \n\
-            - Identify vague terms, missing details, and ambiguous requirements\n\
-            - Generate specific, actionable clarification questions\n\
-            - Provide context for each question\n\
-            - Do NOT write placeholder content\n\n\
-            {}",
+            **CRITICAL REQUIREMENTS**:\n\
+            - Maximum 5 clarification questions\n\
+            - Each question must be answerable with multiple-choice OR short answer\n\
+            - Provide recommended answer for each question\n\
+            - Integrate answers immediately into spec\n\n\
+            ---\n\n\
+            # WORKFLOW\n\n\
+            {}\n\n\
+            ---\n\n\
+            # CHAIN-OF-VERIFICATION\n\n\
+            After completing clarifications, verify:\n\n\
+            1. Did each clarification actually resolve the ambiguity it was meant to address?\n\
+            2. Are the integrated answers consistent with other parts of the spec?\n\
+            3. Did I introduce any new ambiguities while resolving old ones?\n\
+            4. Are all clarifications properly documented in the Clarifications section?\n\
+            5. Is the spec now clear enough to proceed to technical planning?\n\n\
+            **Confidence Level**: Provide your confidence (0-100%) in the clarification quality.",
             params.spec_file.display(),
             safe_path.display(),
             params.questions.as_ref()

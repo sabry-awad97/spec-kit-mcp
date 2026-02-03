@@ -128,18 +128,56 @@ impl Tool for ConstitutionTool {
             }
         };
 
-        // Return instructions for AI to follow - DO NOT write template file yet
+        // Return enhanced instructions for AI to follow - DO NOT write template file yet
         let message = format!(
-            "## Task: Create Project Constitution\n\n\
+            "# ROLE & CONTEXT\n\n\
+            You are a **Senior Engineering Manager** with 15+ years of experience in establishing engineering standards and governance.\n\n\
+            ## Task: Create Project Constitution\n\n\
             **Output File**: {}\n\n\
             **Principles**:\n```\n{}\n```\n\n\
             **Constraints**:\n```\n{}\n```\n\n\
             ---\n\n\
-            ## Instructions\n\n\
+            # STRUCTURED THINKING PROTOCOL\n\n\
+            Before generating the constitution, complete these steps:\n\n\
+            ## [UNDERSTAND]\n\
+            - Review current constitution (if exists)\n\
+            - Identify principles being added, modified, or removed\n\
+            - Extract governance requirements\n\n\
+            ## [ANALYZE]\n\
+            - Assess impact of changes on existing projects\n\
+            - Identify dependencies on other templates\n\
+            - Recognize versioning implications\n\n\
+            ## [STRATEGIZE]\n\
+            - Plan version bump based on change type\n\
+            - Determine which templates need updates\n\
+            - Prepare consistency propagation checklist\n\n\
+            ## [EXECUTE]\n\
+            - Update constitution with concrete values\n\
+            - Propagate changes to dependent artifacts\n\
+            - Generate sync impact report\n\
+            - Validate consistency\n\n\
+            ---\n\n\
+            # DETAILED INSTRUCTIONS\n\n\
             You must now follow the detailed workflow below to generate a complete constitution.\n\
             After generating the content, write it to the output file path above.\n\n\
-            **IMPORTANT**: Do NOT write placeholder content. Generate fully populated content following the instructions.\n\n\
-            {}",
+            **CRITICAL REQUIREMENTS**:\n\
+            - All principles MUST be clear, testable, and enforceable\n\
+            - Version bump MUST follow semantic versioning\n\
+            - All dependent templates MUST be identified and updated\n\
+            - No contradictions between principles\n\n\
+            ---\n\n\
+            # WORKFLOW\n\n\
+            {}\n\n\
+            ---\n\n\
+            # CHAIN-OF-VERIFICATION\n\n\
+            After generating the constitution, verify:\n\n\
+            1. Are all principles clear, testable, and enforceable?\n\
+            2. Is the version bump appropriate for the type of changes made?\n\
+            3. Have all dependent templates been identified and updated?\n\
+            4. Are there any contradictions between principles?\n\
+            5. Can developers easily understand what's required vs. recommended?\n\n\
+            **Confidence Level**: Provide your confidence (0-100%) in the constitution quality.\n\n\
+            **Key Assumptions**: List assumptions about project context.",
             safe_path.display(),
             params.principles,
             params.constraints.as_deref().unwrap_or("(none provided)"),

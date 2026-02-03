@@ -126,19 +126,57 @@ impl Tool for PlanTool {
                 )
             })?;
 
-        // Return instructions for AI to follow - DO NOT write template file yet
+        // Return enhanced instructions for AI to follow - DO NOT write template file yet
         let message = format!(
-            "## Task: Create Technical Implementation Plan\n\n\
+            "# ROLE & CONTEXT\n\n\
+            You are a **Senior Software Architect** with 12+ years of experience in system design and technical planning.\n\n\
+            ## Task: Create Technical Implementation Plan\n\n\
             **Output File**: {}\n\n\
             **Specification File**: {}\n\n\
             **Tech Stack**:\n```\n{}\n```\n\n\
             **Specification Content**:\n```\n{}\n```\n\n\
             ---\n\n\
-            ## Instructions\n\n\
+            # STRUCTURED THINKING PROTOCOL\n\n\
+            Before generating the plan, complete these steps:\n\n\
+            ## [UNDERSTAND]\n\
+            - Review feature requirements from specification\n\
+            - Identify technical constraints and non-functional requirements\n\
+            - Extract key architectural decisions needed\n\n\
+            ## [ANALYZE]\n\
+            - Break down into technical components (data, logic, presentation, integration)\n\
+            - Identify dependencies on external systems\n\
+            - Assess scalability, performance, and security requirements\n\n\
+            ## [STRATEGIZE]\n\
+            - Evaluate 2-3 potential architectural approaches\n\
+            - Consider trade-offs: simplicity vs. flexibility, performance vs. maintainability\n\
+            - Select technology stack based on requirements\n\n\
+            ## [EXECUTE]\n\
+            - Generate technical plan with justified decisions\n\
+            - Create design artifacts (data models, contracts)\n\
+            - Validate against constitution and quality gates\n\n\
+            ---\n\n\
+            # DETAILED INSTRUCTIONS\n\n\
             You must now follow the detailed workflow below to generate a complete technical plan.\n\
             After generating the content, write it to the output file path above.\n\n\
-            **IMPORTANT**: Do NOT write placeholder content. Generate fully populated content following the instructions.\n\n\
-            {}",
+            **CRITICAL REQUIREMENTS**:\n\
+            - Every technology choice MUST have rationale tied to requirements\n\
+            - Constitution compliance is mandatory\n\
+            - Resolve all NEEDS CLARIFICATION before Phase 1\n\
+            - Provide specific, actionable design decisions\n\n\
+            ---\n\n\
+            # WORKFLOW\n\n\
+            {}\n\n\
+            ---\n\n\
+            # CHAIN-OF-VERIFICATION\n\n\
+            After generating the plan, verify:\n\n\
+            1. Does every technology choice have clear rationale tied to requirements?\n\
+            2. Are all constitution principles addressed with compliance status?\n\
+            3. Can the data model support all functional requirements?\n\
+            4. Are integration points clearly defined with error handling?\n\
+            5. Is the implementation phased to deliver value incrementally?\n\n\
+            **Confidence Level**: Provide your confidence (0-100%) in the plan quality.\n\n\
+            **Key Assumptions**: List critical technical assumptions.\n\n\
+            **Alternative Approach** (if confidence <80%): Describe alternative strategy.",
             safe_path.display(),
             params.spec_file.display(),
             params.tech_stack.as_deref().unwrap_or("(not specified - you should determine appropriate stack)"),

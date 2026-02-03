@@ -148,9 +148,11 @@ impl Tool for AnalyzeTool {
             }
         }
 
-        // Return instructions for AI to follow - DO NOT write file yet
+        // Return enhanced instructions for AI to follow - DO NOT write file yet
         let message = format!(
-            "## Task: Analyze Project Artifacts\n\n\
+            "# ROLE & CONTEXT\n\n\
+            You are a **Senior Quality Assurance Architect** with 12+ years of experience in requirements validation and consistency analysis.\n\n\
+            ## Task: Analyze Project Artifacts\n\n\
             **Project Path**: {}\n\n\
             **Output File**: {}\n\n\
             **Check Consistency**: {}\n\
@@ -158,16 +160,47 @@ impl Tool for AnalyzeTool {
             **Artifacts Found**: {}/{}\n\n\
             {}\n\n\
             ---\n\n\
-            ## Instructions\n\n\
+            # STRUCTURED THINKING PROTOCOL\n\n\
+            Before performing analysis, complete these steps:\n\n\
+            ## [UNDERSTAND]\n\
+            - Review scope of analysis (spec, plan, tasks)\n\
+            - Identify constitution principles to validate against\n\
+            - Note expected relationships between artifacts\n\n\
+            ## [ANALYZE]\n\
+            - Load and parse all three artifacts efficiently\n\
+            - Build semantic models of requirements, architecture, tasks\n\
+            - Identify relationships and dependencies\n\
+            - Detect patterns of inconsistency or gaps\n\n\
+            ## [STRATEGIZE]\n\
+            - Prioritize findings by severity (CRITICAL > HIGH > MEDIUM > LOW)\n\
+            - Focus on high-signal issues that block implementation\n\
+            - Plan remediation recommendations\n\n\
+            ## [EXECUTE]\n\
+            - Generate structured analysis report\n\
+            - Provide specific examples with line references\n\
+            - Offer concrete remediation suggestions\n\
+            - Deliver actionable recommendations\n\n\
+            ---\n\n\
+            # DETAILED INSTRUCTIONS\n\n\
             You must now follow the detailed workflow below to analyze cross-artifact consistency.\n\
             After generating the content, write it to the output file path above.\n\n\
-            **IMPORTANT**: \n\
-            - Read all available artifacts\n\
-            - Check for consistency between constitution, spec, plan, and tasks\n\
-            - Verify all requirements are covered\n\
-            - Identify gaps and inconsistencies\n\
-            - Do NOT write placeholder content\n\n\
-            {}",
+            **CRITICAL REQUIREMENTS**:\n\
+            - STRICTLY READ-ONLY (do not modify any files)\n\
+            - Constitution violations are automatically CRITICAL\n\
+            - Limit findings to 50 (prioritize by severity)\n\
+            - Provide specific locations and actionable recommendations\n\n\
+            ---\n\n\
+            # WORKFLOW\n\n\
+            {}\n\n\
+            ---\n\n\
+            # CHAIN-OF-VERIFICATION\n\n\
+            After completing analysis, verify:\n\n\
+            1. Did I correctly identify all constitution violations?\n\
+            2. Are my severity assignments consistent and justified?\n\
+            3. Have I provided actionable recommendations for each finding?\n\
+            4. Did I miss any obvious coverage gaps or inconsistencies?\n\
+            5. Is my analysis focused on high-impact issues vs. nitpicking?\n\n\
+            **Confidence Level**: Provide your confidence (0-100%) in the analysis quality.",
             params.project_path.display(),
             safe_output_path.display(),
             params.check_consistency,

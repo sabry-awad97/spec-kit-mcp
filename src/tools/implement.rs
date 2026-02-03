@@ -113,22 +113,56 @@ impl Tool for ImplementTool {
                 format!("Failed to read tasks file: {}", params.task_file.display())
             })?;
 
-        // Return instructions for AI to follow
+        // Return enhanced instructions for AI to follow
         let message = format!(
-            "## Task: Execute Implementation\n\n\
+            "# ROLE & CONTEXT\n\n\
+            You are a **Senior Software Engineer** with 12+ years of experience in full-stack development and implementation.\n\n\
+            ## Task: Execute Implementation\n\n\
             **Task File**: {}\n\n\
             **Output Directory**: {}\n\n\
             **Additional Context**:\n```\n{}\n```\n\n\
             **Tasks Content**:\n```\n{}\n```\n\n\
             ---\n\n\
-            ## Instructions\n\n\
+            # STRUCTURED THINKING PROTOCOL\n\n\
+            Before executing implementation, complete these steps:\n\n\
+            ## [UNDERSTAND]\n\
+            - Review complete task list from tasks.md\n\
+            - Understand technical architecture from plan.md\n\
+            - Identify current phase and dependencies\n\n\
+            ## [ANALYZE]\n\
+            - Assess task dependencies and execution order\n\
+            - Identify which tasks can run in parallel\n\
+            - Recognize potential integration challenges\n\n\
+            ## [STRATEGIZE]\n\
+            - Plan phase-by-phase execution approach\n\
+            - Determine validation checkpoints\n\
+            - Prepare error handling strategy\n\n\
+            ## [EXECUTE]\n\
+            - Implement tasks following the plan\n\
+            - Validate each phase before proceeding\n\
+            - Track progress and mark completed tasks\n\
+            - Handle errors systematically\n\n\
+            ---\n\n\
+            # DETAILED INSTRUCTIONS\n\n\
             You must now follow the detailed workflow below to implement the tasks.\n\n\
-            **IMPORTANT**: \n\
+            **CRITICAL REQUIREMENTS**:\n\
             - Implement each task in order, respecting dependencies\n\
             - Write complete, working code (no placeholders)\n\
             - Create files in the output directory specified above\n\
-            - Follow the technical plan and specifications\n\n\
-            {}",
+            - Follow the technical plan and specifications\n\
+            - Mark completed tasks as [X] in the tasks file\n\n\
+            ---\n\n\
+            # WORKFLOW\n\n\
+            {}\n\n\
+            ---\n\n\
+            # CHAIN-OF-VERIFICATION\n\n\
+            After completing each phase, verify:\n\n\
+            1. Does the implemented code match the task description exactly?\n\
+            2. Are all file paths correct and files created in the right locations?\n\
+            3. Does the code follow the architecture and patterns from the plan?\n\
+            4. Are error cases handled appropriately?\n\
+            5. Is the code ready for the next phase (no blocking issues)?\n\n\
+            **Confidence Level**: Provide your confidence (0-100%) in the implementation quality.",
             params.task_file.display(),
             safe_output_dir.display(),
             params.context.as_deref().unwrap_or("(none provided)"),

@@ -133,6 +133,8 @@ impl InitTool {
 
         // Setup agent configuration
         let agent_id = params.ai_assistant.as_deref().unwrap_or("claude");
+        let agent_config = crate::agents::get_agent_config(agent_id)
+            .ok_or_else(|| anyhow!("Unknown agent: {}", agent_id))?;
         self.setup_agent_config(&actual_path, agent_id)?;
 
         // Setup script permissions (Unix only)
@@ -146,41 +148,178 @@ impl InitTool {
             false
         };
 
-        // Build success message
-        let mut message = format!(
-            "Successfully initialized spec-kit project '{}' at {}\n\n",
-            project_name,
-            actual_path.display()
-        );
+        // Build success message with structured guidance
+        let mut message = String::new();
 
-        message.push_str("Configuration:\n");
-        message.push_str(&format!("  - AI Assistant: {}\n", agent_id));
+        message.push_str("# Project Initialization Complete ✓\n\n");
+        message.push_str("---\n\n");
+
+        message.push_str("## Project Details\n\n");
+        message.push_str(&format!("- **Project Name**: {}\n", project_name));
+        message.push_str(&format!("- **Location**: {}\n", actual_path.display()));
+        message.push_str(&format!("- **AI Assistant**: {}\n", agent_id));
         message.push_str(&format!(
-            "  - Script Type: {}\n",
+            "- **Script Type**: {}\n",
             params
                 .script_type
                 .as_deref()
                 .unwrap_or(if cfg!(windows) { "ps" } else { "sh" })
         ));
         message.push_str(&format!(
-            "  - Git: {}\n",
+            "- **Git Repository**: {}\n\n",
             if git_initialized {
-                "initialized"
+                "Initialized"
             } else {
-                "skipped"
+                "Skipped"
             }
         ));
 
-        message.push_str("\nNext steps:\n");
+        message.push_str("## Created Structure\n\n");
+        message.push_str("```\n");
+        message.push_str(&format!("{}/\n", project_name));
+        message.push_str("├── .specify/\n");
+        message.push_str("│   ├── memory/\n");
+        message.push_str("│   │   └── constitution.md    # Project principles and standards\n");
+        message.push_str("│   └── templates/\n");
+        message.push_str("│       ├── constitution.md    # Constitution template\n");
+        message.push_str("│       ├── spec-template.md   # Specification template\n");
+        message.push_str("│       ├── plan-template.md   # Technical plan template\n");
+        message.push_str("│       ├── tasks-template.md  # Task list template\n");
+        message.push_str("│       └── checklist-template.md  # Quality checklist template\n");
         message.push_str(&format!(
-            "1. Navigate to the project: cd {}\n",
+            "└── {}/ # Agent configuration\n",
+            agent_config.folder
+        ));
+        if git_initialized {
+            message.push_str("    └── .git/              # Git repository\n");
+        }
+        message.push_str("```\n\n");
+
+        message.push_str("---\n\n");
+        message.push_str("## Spec-Kit Development Workflow\n\n");
+        message.push_str("Follow this structured approach to build your feature:\n\n");
+
+        message.push_str("### Phase 1: Foundation (Define What to Build)\n\n");
+        message.push_str(&format!(
+            "1. **Navigate to project**: `cd {}`\n\n",
             project_name
         ));
-        message.push_str("2. Create constitution: Use speckit_constitution tool\n");
-        message.push_str("3. Define requirements: Use speckit_specify tool\n");
-        message.push_str("4. Create technical plan: Use speckit_plan tool\n");
-        message.push_str("5. Generate tasks: Use speckit_tasks tool\n");
-        message.push_str("6. Implement: Use speckit_implement tool\n");
+        message.push_str("2. **Define project principles** (Optional but recommended)\n");
+        message.push_str("   - Tool: `speckit_constitution`\n");
+        message.push_str("   - Purpose: Establish core principles, technical constraints, and development standards\n");
+        message.push_str("   - Output: `.specify/memory/constitution.md`\n");
+        message.push_str(
+            "   - Example: \"Focus on simplicity, prioritize security, use TypeScript\"\n\n",
+        );
+
+        message.push_str("3. **Specify requirements**\n");
+        message.push_str("   - Tool: `speckit_specify`\n");
+        message.push_str("   - Purpose: Define WHAT you want to build (features, user stories, acceptance criteria)\n");
+        message.push_str("   - Output: `speckit.specify`\n");
+        message
+            .push_str("   - Focus: User needs and business requirements (technology-agnostic)\n\n");
+
+        message.push_str("4. **Clarify ambiguities** (If needed)\n");
+        message.push_str("   - Tool: `speckit_clarify`\n");
+        message.push_str(
+            "   - Purpose: Identify underspecified areas and generate clarification questions\n",
+        );
+        message.push_str("   - Output: `speckit.clarify`\n");
+        message.push_str("   - Use when: Specification has unclear or ambiguous requirements\n\n");
+
+        message.push_str("### Phase 2: Planning (Define How to Build)\n\n");
+        message.push_str("5. **Create technical plan**\n");
+        message.push_str("   - Tool: `speckit_plan`\n");
+        message.push_str(
+            "   - Purpose: Design HOW to implement (architecture, tech stack, approach)\n",
+        );
+        message.push_str("   - Output: `speckit.plan`\n");
+        message.push_str(
+            "   - Includes: Technology choices, system design, implementation strategy\n\n",
+        );
+
+        message.push_str("6. **Generate task list**\n");
+        message.push_str("   - Tool: `speckit_tasks`\n");
+        message.push_str("   - Purpose: Break down plan into actionable, ordered tasks\n");
+        message.push_str("   - Output: `speckit.tasks`\n");
+        message.push_str("   - Result: Prioritized task list with dependencies and estimates\n\n");
+
+        message.push_str("7. **Generate validation checklist** (Optional)\n");
+        message.push_str("   - Tool: `speckit_checklist`\n");
+        message.push_str("   - Purpose: Create quality validation checklist from specification\n");
+        message.push_str("   - Output: `speckit.checklist`\n");
+        message
+            .push_str("   - Use for: Ensuring all requirements are met during implementation\n\n");
+
+        message.push_str("### Phase 3: Execution (Build It)\n\n");
+        message.push_str("8. **Execute implementation**\n");
+        message.push_str("   - Tool: `speckit_implement`\n");
+        message.push_str("   - Purpose: Generate code and documentation following the task list\n");
+        message.push_str("   - Output: Source code in specified directory (default: `./src`)\n");
+        message.push_str("   - Process: Implements tasks in order, validates each phase\n\n");
+
+        message.push_str("### Phase 4: Validation (Verify Quality)\n\n");
+        message.push_str("9. **Analyze consistency**\n");
+        message.push_str("   - Tool: `speckit_analyze`\n");
+        message.push_str(
+            "   - Purpose: Verify alignment between constitution, specs, plans, and tasks\n",
+        );
+        message.push_str("   - Output: `speckit.analyze`\n");
+        message.push_str("   - Checks: Cross-artifact consistency and requirement coverage\n\n");
+
+        message.push_str("---\n\n");
+        message.push_str("## Quick Start Example\n\n");
+        message.push_str("```bash\n");
+        message.push_str(&format!(
+            "# Navigate to your project\ncd {}\n\n",
+            project_name
+        ));
+        message.push_str("# Define project principles (optional)\n");
+        message.push_str("# Use speckit_constitution tool with your principles\n\n");
+        message.push_str("# Specify what you want to build\n");
+        message.push_str("# Use speckit_specify tool with your requirements\n");
+        message.push_str(
+            "# Example: \"Build a user authentication system with email/password login\"\n\n",
+        );
+        message.push_str("# Create technical plan\n");
+        message.push_str("# Use speckit_plan tool referencing your specification\n\n");
+        message.push_str("# Generate actionable tasks\n");
+        message.push_str("# Use speckit_tasks tool referencing your plan\n\n");
+        message.push_str("# Execute implementation\n");
+        message.push_str("# Use speckit_implement tool referencing your tasks\n");
+        message.push_str("```\n\n");
+
+        message.push_str("---\n\n");
+        message.push_str("## Key Principles\n\n");
+        message.push_str("- **Specification First**: Define WHAT before HOW\n");
+        message.push_str(
+            "- **Technology Agnostic**: Keep requirements separate from implementation\n",
+        );
+        message.push_str("- **Iterative Refinement**: Clarify ambiguities before planning\n");
+        message.push_str("- **Structured Workflow**: Follow the phase-by-phase approach\n");
+        message.push_str("- **Quality Validation**: Use checklists and analysis tools\n\n");
+
+        message.push_str("## Additional Resources\n\n");
+        message.push_str(&format!(
+            "- **Agent Configuration**: {}/README.md\n",
+            agent_config.folder
+        ));
+        message.push_str("- **Constitution Template**: .specify/templates/constitution.md\n");
+        message.push_str("- **All Templates**: .specify/templates/\n\n");
+
+        message.push_str("## Environment Verification\n\n");
+        message.push_str(
+            "Run `speckit_check` tool to verify your development environment and check for:\n",
+        );
+        message.push_str("- Required tools (git)\n");
+        message.push_str("- Optional AI coding assistants (Claude, Cursor, VS Code)\n");
+        message.push_str("- Overall environment readiness\n\n");
+
+        message.push_str("---\n\n");
+        message.push_str("**Status**: ✅ Ready for development\n");
+        message.push_str(
+            "**Next Action**: Define your project constitution or start specifying requirements\n",
+        );
 
         Ok(message)
     }
